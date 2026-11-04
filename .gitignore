@@ -1,0 +1,10 @@
+# Run-specific artifacts, datasets, checkpoints, external checkouts, and local envs
+runs/
+data/
+checkpoints/
+third_party/
+.venvs/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
