@@ -8,7 +8,7 @@
 - `bash scripts/bootstrap_model_envs.sh`는 `.venvs/mast3r-slam`과 `.venvs/sab3r`를 생성하지만, 패키지는 설치하지 않습니다. CUDA 호환성은 두 upstream의 고정 버전을 확인한 뒤 각 환경에 따로 설치합니다.
 - `MAST3R_SLAM_ROOT`, `SAB3R_ROOT` 환경 변수에 각 외부 체크아웃 경로를 지정합니다.
 - 데이터 경로와 체크포인트 경로는 공유 설정에 박아 넣지 않습니다. 실행 명령이 받도록 하고, run config에 실제 식별자와 해시를 기록합니다.
-- `scripts/experiment.py`는 실험 디렉터리와 provenance 기록을 관리합니다. E1은 `scripts/run_slam_export.sh`로, E2는 `scripts/run_e2_sab3r_semantics.sh`로 고정 upstream을 실행합니다. E3는 E1/E2 고정 산출물에서 frame-wise Region을 만들고, E4는 고정 Pose의 제한된 ray-depth plane refinement를 수행하며, E5는 Replica depth를 평가 전용 GT로 사용합니다. E6 보고서 생성은 아직 연결되지 않았습니다.
+- `scripts/experiment.py`는 실험 디렉터리와 provenance 기록을 관리합니다. E1은 `scripts/run_slam_export.sh`로, E2는 `scripts/run_e2_sab3r_semantics.sh`로 고정 upstream을 실행합니다. E3는 E1/E2 고정 산출물에서 frame-wise Region을 만들고, E4는 고정 Pose의 제한된 ray-depth plane refinement를 수행하며, E5는 Replica depth를 평가 전용 GT로 사용하고, E6은 완료된 단계의 manifest와 hash를 검증해 종합 보고서를 생성합니다.
 
 ### GPU/CUDA 확인 위치
 
@@ -84,7 +84,7 @@ runs/semantic_region_pointmap/<run-id>/
 
 실제 E5 geometry 평가는 [E5 결과 보고서](experiments/E5_gt_evaluation/E5-replica-office0-pilot.md)에 기록했습니다. 이 단일 frame 결과에서 계획서의 10% RMSE 개선 목표는 지지되지 않았습니다.
 
-공통 runner는 그 단계의 `logs/command.log`에 로그를 남기고 상태를 기록하며, 해당 단계의 `artifacts/`만 출력 경로로 사용합니다. E1–E4 전용 runner가 각각 SLAM export, semantic score/mask, Region, bounded ray-depth plane refinement를 연결하고, E5 전용 runner는 고정 B0 기반의 단일 평가 Sim(3)와 Replica depth 비교를 수행합니다. E6 report runner는 아직 연결하지 않았습니다.
+공통 runner는 그 단계의 `logs/command.log`에 로그를 남기고 상태를 기록하며, 해당 단계의 `artifacts/`만 출력 경로로 사용합니다. E1–E4 전용 runner가 각각 SLAM export, semantic score/mask, Region, bounded ray-depth plane refinement를 연결하고, E5 전용 runner는 고정 B0 기반의 단일 평가 Sim(3)와 Replica depth 비교를 수행합니다. E6 report runner는 입력 stage manifest와 artifact hash를 확인한 뒤 stage 내부 요약과 `docs/experiments/E6_report/` 보고서를 생성합니다.
 
 ```bash
 bash scripts/run_slam_export.sh \\
@@ -129,6 +129,18 @@ bash scripts/run_e5_gt_evaluation.sh \\
   E0a-readiness-20261104-002
 ```
 
+E6은 결과 run ID, E1/E2 입력 run ID, E0a 환경·원본 frame 대응 run ID를 받습니다. 해당 run의 E3–E5와 입력 run들의 E0/E0a–E2 manifest가 모두 완료되고 산출물 hash가 맞는지 확인한 뒤 요약을 생성합니다.
+
+```bash
+bash scripts/run_e6_report.sh \\
+  E3-replica-office0-20261104-001 \\
+  E0a-readiness-20261104-002 \\
+  E2-replica-office0-20261104-001 \\
+  E0a-readiness-20261104-002
+```
+
+E6 종합 결과는 [E6 파일럿 보고서](experiments/E6_report/E6-E3-replica-office0-20261104-001.md)에 기록합니다. 이 보고 단계는 새 추론이나 선택적 3DGS 실험을 포함하지 않습니다.
+
 단계 완료 후 manifest에 산출물 SHA-256이 기록됩니다. 단계는 성공·실패 모두 같은 run에서 재실행할 수 없으므로 변경/재실험은 새 run ID로 분리합니다. 실패 시 원인과 부분 산출물을 보존합니다.
 
 ### E1 — 실제 SLAM export 실행
@@ -155,4 +167,4 @@ bash scripts/run_slam_export.sh \\
 4. 소형 시퀀스로 E1만 수행합니다. export 형식과 RGB/기하 정합을 확인하기 전에는 후속 단계를 시작하지 않습니다.
 5. 검증된 동일 E1 산출물을 고정 입력으로 E2 이후 비교군에 재사용합니다. 모든 비교군은 별도의 run ID와 stage 경로를 씁니다.
 
-환경 자동 설치는 upstream별 CUDA/의존성 조합을 확인한 뒤 별도 설치 스크립트로 추가합니다. E1–E5 실행기를 연결·실행했습니다. E6 report generation은 아직 연결하지 않았습니다.
+환경 자동 설치는 upstream별 CUDA/의존성 조합을 확인한 뒤 별도 설치 스크립트로 추가합니다. E1–E6 실행기를 연결·실행했습니다.
