@@ -52,6 +52,8 @@ def main() -> None:
     parser.add_argument("--input-image", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--stage-name", default="E2_sab3r_semantics")
+    parser.add_argument("--inference-size", type=int, default=512,
+                        help="DUSt3R long-edge inference size; scores are mapped back to the E1 pixel grid")
     args = parser.parse_args()
 
     repo = args.repo.resolve()
@@ -110,10 +112,36 @@ def main() -> None:
     model.eval().to(device)
     del checkpoint, state
 
-    imgs = load_images([str(args.input_image)], size=512, verbose=True)
+    if args.inference_size <= 0 or args.inference_size % 16:
+        raise ValueError("--inference-size must be a positive multiple of 16")
+    inference_image_path = args.input_image
+    padding_ltrb = [0, 0, 0, 0]
+    if args.inference_size != 512:
+        # Preserve the E1 field of view: resize uniformly, then edge-pad to the
+        # 16-pixel grid required by DUSt3R. This avoids its centered crop.
+        scale = args.inference_size / max(rgb.shape[:2])
+        resized_hw = (int(round(rgb.shape[0] * scale)), int(round(rgb.shape[1] * scale)))
+        resized = np.asarray(
+            Image.fromarray(rgb).resize((resized_hw[1], resized_hw[0]), Image.Resampling.LANCZOS)
+        )
+        pad_h = (-resized_hw[0]) % 16
+        pad_w = (-resized_hw[1]) % 16
+        top, left = pad_h // 2, pad_w // 2
+        bottom, right = pad_h - top, pad_w - left
+        padded = np.pad(resized, ((top, bottom), (left, right), (0, 0)), mode="edge")
+        inference_image_path = args.output / "inference_input.png"
+        inference_image_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(padded).save(inference_image_path)
+        padding_ltrb = [left, top, right, bottom]
+
+    imgs = load_images([str(inference_image_path)], size=args.inference_size, verbose=True)
     loaded_hw = tuple(int(x) for x in imgs[0]["true_shape"][0])
-    if loaded_hw != rgb.shape[:2]:
-        raise RuntimeError(f"SAB3R crop/resize changed pixel grid: {loaded_hw} vs {rgb.shape[:2]}")
+    expected_inference_hw = (
+        resized_hw[0] + padding_ltrb[1] + padding_ltrb[3],
+        resized_hw[1] + padding_ltrb[0] + padding_ltrb[2],
+    ) if args.inference_size != 512 else rgb.shape[:2]
+    if loaded_hw != expected_inference_hw:
+        raise RuntimeError(f"SAB3R loader changed prepared pixel grid: {loaded_hw} vs {expected_inference_hw}")
     second = copy.deepcopy(imgs[0])
     second["idx"] = 1
     second["instance"] = "1"
@@ -133,6 +161,15 @@ def main() -> None:
         # SAB3R's postprocessor returns dense CLIP features in HxWxC layout.
         pixel_features = F.normalize(clip_features, dim=-1)
         scores = torch.einsum("hwc,lc->hwl", pixel_features, text_features)
+        if args.inference_size != 512:
+            left, top, right, bottom = padding_ltrb
+            h_end = scores.shape[0] - bottom if bottom else scores.shape[0]
+            w_end = scores.shape[1] - right if right else scores.shape[1]
+            scores = scores[top:h_end, left:w_end]
+            scores = F.interpolate(
+                scores.permute(2, 0, 1)[None], size=rgb.shape[:2],
+                mode="bilinear", align_corners=False,
+            )[0].permute(1, 2, 0)
         score_array = scores.cpu().numpy().astype(np.float32)
         labels = score_array.argmax(axis=-1).astype(np.uint8)
         sorted_scores = np.sort(score_array, axis=-1)
@@ -181,7 +218,15 @@ def main() -> None:
         "timestamp": timestamp,
         "input_shape_hw": list(rgb.shape[:2]),
         "sab3r_loaded_shape_hw": list(loaded_hw),
-        "resize_crop_alignment": "exact; no crop or resize was introduced for this E1 keyframe",
+        "inference_size_long_edge": args.inference_size,
+        "inference_input_image": str(inference_image_path.resolve()),
+        "inference_input_sha256": sha256_file(inference_image_path),
+        "inference_resize_padding_ltrb": padding_ltrb,
+        "score_mapping": (
+            "native 1:1 E1 pixel grid" if args.inference_size == 512 else
+            "uniformly resized input with edge padding; padding removed from similarity scores; "
+            "similarity scores bilinearly upsampled to the exact E1 pointmap grid before argmax"
+        ),
         "labels": LABELS,
         "text_prompts": PROMPTS,
         "scoring": "cosine similarity between normalized SAB3R per-pixel CLIP features and normalized CLIP text embeddings",

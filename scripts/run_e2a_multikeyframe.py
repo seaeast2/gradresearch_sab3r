@@ -31,6 +31,7 @@ def main() -> int:
     parser.add_argument("--featup", type=Path, required=True)
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--inference-size", type=int, default=512)
     args = parser.parse_args()
 
     e1a = args.e1a_artifacts.resolve()
@@ -84,6 +85,7 @@ def main() -> int:
             "--input-image", str(image),
             "--output", str(result_dir),
             "--stage-name", "E2a_multikeyframe_semantics",
+            "--inference-size", str(args.inference_size),
         ]
         subprocess.run(command, cwd=args.repo.resolve(), env=env, check=True)
         score_file = result_dir / "semantic_scores.npz"
@@ -112,6 +114,7 @@ def main() -> int:
         "source_e1a_export_manifest_sha256": sha256(export_path),
         "keyframe_count": len(records),
         "labels_and_prompts": "fixed by scripts/run_e2_sab3r.py and shared across every Keyframe",
+        "inference_size_long_edge": args.inference_size,
         "elapsed_seconds": time.perf_counter() - started,
         "keyframes": records,
     }
