@@ -34,6 +34,7 @@ def main() -> int:
     parser.add_argument("--calib", help="optional upstream intrinsics YAML")
     parser.add_argument("--python", dest="python_exe", help="MASt3R-SLAM environment Python")
     parser.add_argument("--keyframe-buffer", type=int, default=32)
+    parser.add_argument("--stage-name", default="E1_slam_export", help="experiment stage name")
     parser.add_argument("--upstream-root", default=os.environ.get("MAST3R_SLAM_ROOT"))
     args = parser.parse_args()
 
@@ -42,8 +43,8 @@ def main() -> int:
     artifacts_dir = Path(os.environ.get("EXPERIMENT_ARTIFACTS_DIR", ""))
     if not run_dir.is_dir() or not stage_dir.is_dir() or not artifacts_dir.is_dir():
         parser.error("invoke through scripts/run_semantic_region_stage.sh")
-    if os.environ.get("EXPERIMENT_STAGE") != "E1_slam_export":
-        parser.error("this command only runs in the E1_slam_export stage")
+    if os.environ.get("EXPERIMENT_STAGE") != args.stage_name:
+        parser.error(f"this command only runs in the {args.stage_name} stage")
 
     upstream = Path(args.upstream_root).expanduser().resolve() if args.upstream_root else None
     if upstream is None or not (upstream / "main.py").is_file():
