@@ -14,12 +14,12 @@ if [[ ! -f "$task_run/run.json" || ! -d "$task_stage_dir/artifacts" ]]; then
   exit 2
 fi
 task_manifest="$task_stage_dir/manifest.json"
-task_status="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$task_manifest")"
+task_status="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$task_manifest")"
 if [[ "$task_status" != planned ]]; then
   echo "stage can only run once (status '$task_status'); create a new run ID to preserve this attempt" >&2
   exit 2
 fi
-python "$task_root/scripts/experiment.py" stage "$task_run_id" "$task_stage" running
+python3 "$task_root/scripts/experiment.py" stage "$task_run_id" "$task_stage" running
 set +e
 (cd "$task_root" && \
   EXPERIMENT_RUN_ID="$task_run_id" \
@@ -31,8 +31,8 @@ set +e
 task_exit=$?
 set -e
 if [[ $task_exit -eq 0 ]]; then
-  python "$task_root/scripts/experiment.py" stage "$task_run_id" "$task_stage" completed
+  python3 "$task_root/scripts/experiment.py" stage "$task_run_id" "$task_stage" completed
 else
-  python "$task_root/scripts/experiment.py" stage "$task_run_id" "$task_stage" failed --note "command exited with status $task_exit"
+  python3 "$task_root/scripts/experiment.py" stage "$task_run_id" "$task_stage" failed --note "command exited with status $task_exit"
 fi
 exit "$task_exit"
