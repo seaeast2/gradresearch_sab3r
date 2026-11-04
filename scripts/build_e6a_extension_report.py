@@ -219,6 +219,23 @@ def markdown_report(payload: dict[str, Any]) -> str:
             f"| {ablation['baseline_b3_fscore_5cm']:.6f} | {ablation['ablation_b3_fscore_5cm']:.6f} "
             f"| {ablation['selected_region_count']} / {ablation['rolled_back_region_count']} |"
         )
+    lines += [
+        "",
+        "## Validation and qualitative support runs",
+        "",
+        "| Run | Completed extension stages |",
+        "|---|---|",
+    ]
+    for record in payload["support_runs"]:
+        completed = [
+            stage for stage, status in record["stage_statuses"].items()
+            if status == "completed" and stage.startswith(("E1a_", "E2a_", "E3a_", "E4a_", "E5a_"))
+        ]
+        lines.append(f"| `{record['run_id']}` | {', '.join(completed) or 'none'} |")
+    lines += [
+        "",
+        "Support-run artifacts are hash-verified and kept separate from the scene-level B0–B3 test table. ETH3D HKairport01 is qualitative only: it has no semantic or geometry ground truth, so its tag, association, and local-refinement outputs do not count as accuracy results.",
+    ]
     lines += ["", "## Interpretation and limitations", ""]
     lines += [f"- {item}" for item in payload["conclusions"]]
     gs = payload["optional_3dgs_feasibility"]
@@ -330,6 +347,7 @@ def main() -> int:
         "The three H4 factor ablations show small, scene-dependent changes. Huber versus squared loss and confidence versus uniform weights do not show a consistent scene-level accuracy advantage; halving the displacement bound preserves the configured safety limit but does not yield consistent metric gains.",
         "The local point-to-plane objective can improve while GT scene metrics remain unchanged or worsen. E4a rollback and exact non-target invariants are part of the result, not omitted failures.",
         "B4 Oracle is unavailable because the supplied exports have no GT semantic/plane masks. E5a used paired GT depth and point-cloud surface F-score; the office2 mesh was not used for triangle point-to-surface scoring, and no matching meshes were found for room1/office1. E3a accepted edge counts have not been verified against GT associations.",
+        "ETH3D HKairport01 provides a qualitative 19-Keyframe extension with 45 accepted Region links and one local wall refinement, but has no semantic/depth/mesh GT and is excluded from accuracy comparisons.",
     ]
     payload = {
         "stage": "E6a_extension_report", "status": "completed",
