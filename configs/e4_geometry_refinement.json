@@ -1,0 +1,25 @@
+{
+  "stage": "E4_geometry_refinement",
+  "input_policy": "E1 pointmap, E2 raw prompt scores, and E3 regions only; GT is evaluation-only in E5",
+  "candidate_labels": ["floor", "wall", "ceiling"],
+  "eligibility": {
+    "minimum_region_pixels": 500,
+    "maximum_pca_smallest_eigenvalue_ratio": 0.05,
+    "minimum_ransac_inlier_fraction": 0.75
+  },
+  "plane_fit": {
+    "method": "deterministic 3-point RANSAC then PCA refit",
+    "iterations": 512,
+    "inlier_distance": "max(0.01 world units, 2 * E3 median accepted edge spacing)"
+  },
+  "refinement": {
+    "parameterization": "camera-ray radial depth only; keyframe pose fixed",
+    "loss": "Huber IRLS",
+    "huber_delta_world_units": 0.02,
+    "displacement_prior_lambda": 1.0,
+    "maximum_radial_displacement": "3 * E3 median accepted edge spacing",
+    "boundary_freeze_pixels": 2,
+    "geometry_confidence_weights": "confidence_avg divided by scene median, clipped to [0.1, 10]"
+  },
+  "threshold_status": "prospective initial pilot settings; not validation-tuned"
+}
