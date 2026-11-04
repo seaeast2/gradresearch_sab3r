@@ -72,8 +72,11 @@ def stage_artifact(run_id: str, stage: str, filename: str) -> Path:
 
 def compact_metrics(metrics_path: Path) -> dict[str, Any]:
     data = load_json(metrics_path)
+    scene_split = data.get("scene_split")
+    if scene_split is None:
+        scene_split = "validation (legacy metrics omitted split field)"
     result: dict[str, Any] = {
-        "scene": data["scene"], "scene_split": data["scene_split"],
+        "scene": data["scene"], "scene_split": scene_split,
         "keyframe_count": data["keyframe_count"],
         "frame_ids": [frame["frame_id"] for frame in data["keyframes"]],
         "sim3_scale": data["common_sim3"]["scale"],
