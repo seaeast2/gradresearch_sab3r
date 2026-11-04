@@ -1,0 +1,15 @@
+{
+  "experiment_name": "semantic_region_pointmap_multikeyframe_extension_report",
+  "run_root": "runs/semantic_region_pointmap",
+  "dataset_id": "multikeyframe_synthesis",
+  "scene_ids": [],
+  "random_seed": 0,
+  "models": {},
+  "stages": ["E6a_extension_report"],
+  "policy": {
+    "scene_level_splits": true,
+    "ground_truth_evaluation_only": true,
+    "validate_manifest_and_artifact_hashes": true,
+    "preserve_failed_attempts": true
+  }
+}
