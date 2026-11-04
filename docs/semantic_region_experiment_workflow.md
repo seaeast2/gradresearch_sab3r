@@ -8,7 +8,7 @@
 - `bash scripts/bootstrap_model_envs.sh`는 `.venvs/mast3r-slam`과 `.venvs/sab3r`를 생성하지만, 패키지는 설치하지 않습니다. CUDA 호환성은 두 upstream의 고정 버전을 확인한 뒤 각 환경에 따로 설치합니다.
 - `MAST3R_SLAM_ROOT`, `SAB3R_ROOT` 환경 변수에 각 외부 체크아웃 경로를 지정합니다.
 - 데이터 경로와 체크포인트 경로는 공유 설정에 박아 넣지 않습니다. 실행 명령이 받도록 하고, run config에 실제 식별자와 해시를 기록합니다.
-- `scripts/experiment.py`는 실험 디렉터리와 provenance 기록만 관리합니다. 아직 MASt3R-SLAM/SAB3R 출력 형식이 연결되지 않았으므로, 해당 명령을 임의로 가정해 실행하지 않습니다.
+- `scripts/experiment.py`는 실험 디렉터리와 provenance 기록을 관리합니다. E1은 `scripts/run_slam_export.sh`로 고정한 MASt3R-SLAM checkout을 실행하며, E2–E6의 model/analysis 명령은 아직 연결되지 않았습니다.
 
 ### GPU/CUDA 확인 위치
 
@@ -74,15 +74,19 @@ runs/semantic_region_pointmap/<run-id>/
 
 실제 E0a 점검은 [E0a 사전 점검 결과](experiments/E0a_preflight/E0a-readiness-20261104-002.md)에 기록했습니다. 통과 판정은 사전 환경 확인이며 SLAM 추론 성공을 의미하지 않습니다.
 
-각 단계의 명령은 공통 runner를 통해 호출합니다. runner는 그 단계의 `logs/command.log`에 로그를 남기고 상태를 기록하며, 해당 단계의 `artifacts/`만 입력/출력 경로로 사용합니다.
+실제 E1 실행 및 export 확인은 [E1 결과 보고서](experiments/E1_slam_export/E1-replica-office0-pilot.md)에 기록했습니다.
+
+공통 runner는 그 단계의 `logs/command.log`에 로그를 남기고 상태를 기록하며, 해당 단계의 `artifacts/`만 출력 경로로 사용합니다. E1 전용 runner는 MASt3R-SLAM CLI와 배열 export를 연결합니다. E2–E6은 각 전용 실행기를 추가해야 합니다.
 
 ```bash
-# 형식 예시: 모델/평가 코드를 연결한 뒤 사용
-bash scripts/run_semantic_region_stage.sh pilot-replica-001 E1_slam_export \\
-  python /path/to/export_slam.py --output runs/semantic_region_pointmap/pilot-replica-001/stages/E1_slam_export/artifacts
+bash scripts/run_slam_export.sh \\
+  E0a-readiness-20261104-002 \\
+  runs/semantic_region_pointmap/E0a-readiness-20261104-002/stages/E0a_preflight/artifacts/replica_office0_rgb30 \\
+  "$MAST3R_SLAM_ROOT/config/base.yaml" \\
+  --python "$MAST3R_SLAM_PYTHON" --keyframe-buffer 32
 ```
 
-현재 runner는 인자로 받은 명령을 실행할 뿐이며 모델의 CLI를 가정하지 않습니다. 명령에서 `EXPERIMENT_ARTIFACTS_DIR`를 출력 경로로 사용하고, 읽기 입력은 이전 단계의 절대 경로를 지정합니다. 단계 완료 후 manifest에 산출물 SHA-256이 기록됩니다. 단계는 성공·실패 모두 같은 run에서 재실행할 수 없으므로 변경/재실험은 새 run ID로 분리합니다. 실패 시 원인과 부분 산출물을 보존합니다.
+단계 완료 후 manifest에 산출물 SHA-256이 기록됩니다. 단계는 성공·실패 모두 같은 run에서 재실행할 수 없으므로 변경/재실험은 새 run ID로 분리합니다. 실패 시 원인과 부분 산출물을 보존합니다.
 
 ### E1 — 실제 SLAM export 실행
 
@@ -106,6 +110,6 @@ bash scripts/run_slam_export.sh \\
 2. 각 upstream README의 권장 Python/PyTorch/CUDA 조합으로 독립 가상환경을 만듭니다.
 3. 환경변수에 저장소 경로를 지정하고 `init`, `capture-env`를 수행합니다.
 4. 소형 시퀀스로 E1만 수행합니다. export 형식과 RGB/기하 정합을 확인하기 전에는 후속 단계를 시작하지 않습니다.
-5. 검증된 동일 01 산출물을 고정 입력으로 02 이후 비교군에 재사용합니다. 모든 비교군은 별도의 run ID와 stage 경로를 씁니다.
+5. 검증된 동일 E1 산출물을 고정 입력으로 E2 이후 비교군에 재사용합니다. 모든 비교군은 별도의 run ID와 stage 경로를 씁니다.
 
-환경 자동 설치는 upstream별 CUDA/의존성 조합을 확인한 뒤 별도 설치 스크립트로 추가합니다. 이 저장소는 아직 upstream의 실제 export·추론 API나 데이터 위치를 연결하지 않았으므로 설치/추론을 추정하지 않습니다.
+환경 자동 설치는 upstream별 CUDA/의존성 조합을 확인한 뒤 별도 설치 스크립트로 추가합니다. E1의 MASt3R-SLAM export는 연결·실행했고, E2 이후의 SAB3R 추론과 Region/geometry/evaluation 코드는 아직 연결하지 않았습니다.

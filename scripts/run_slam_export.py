@@ -4,12 +4,15 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -30,6 +33,7 @@ def main() -> int:
     parser.add_argument("--config", required=True, help="upstream MASt3R-SLAM YAML configuration")
     parser.add_argument("--calib", help="optional upstream intrinsics YAML")
     parser.add_argument("--python", dest="python_exe", help="MASt3R-SLAM environment Python")
+    parser.add_argument("--keyframe-buffer", type=int, default=32)
     parser.add_argument("--upstream-root", default=os.environ.get("MAST3R_SLAM_ROOT"))
     args = parser.parse_args()
 
@@ -75,6 +79,85 @@ def main() -> int:
         "        raise RuntimeError(\"final pointmap export requires single_thread: true\")\n"
     )
     source_text = "import os\n" + source_text.replace(load_config_hook, load_guard)
+    parser_args_hook = '    parser.add_argument("--calib", default="")\n'
+    if source_text.count(parser_args_hook) != 1:
+        parser.error("upstream main.py has an unsupported argument section")
+    source_text = source_text.replace(
+        parser_args_hook,
+        parser_args_hook
+        + '    parser.add_argument("--keyframe-buffer", type=int, default=32)\n'
+        + '    parser.add_argument("--low-vram", action="store_true")\n',
+    )
+    parse_args_hook = "    args = parser.parse_args()\n\n    load_config(args.config)\n"
+    if source_text.count(parse_args_hook) != 1:
+        parser.error("upstream main.py has an unsupported argument parsing section")
+    source_text = source_text.replace(
+        parse_args_hook,
+        "    args = parser.parse_args()\n"
+        "    if args.keyframe_buffer < 1:\n"
+        "        parser.error(\"--keyframe-buffer must be positive\")\n\n"
+        "    load_config(args.config)\n",
+    )
+    if source_text.count('        raise RuntimeError("final pointmap export requires single_thread: true")\n') != 1:
+        parser.error("single-thread guard insertion failed")
+    source_text = source_text.replace(
+        '        raise RuntimeError("final pointmap export requires single_thread: true")\n',
+        '        raise RuntimeError("final pointmap export requires single_thread: true")\n'
+        '    if args.low_vram and not config["single_thread"]:\n'
+        '        parser.error("--low-vram requires single_thread: true")\n'
+        '    if args.low_vram:\n'
+        '        config["release_backend_cuda_cache"] = True\n',
+    )
+    keyframe_ctor = "    keyframes = SharedKeyframes(manager, h, w)\n"
+    if source_text.count(keyframe_ctor) != 1:
+        parser.error("upstream keyframe constructor changed; review the buffer adaptation")
+    source_text = source_text.replace(
+        keyframe_ctor,
+        "    keyframes = SharedKeyframes(manager, h, w, buffer=args.keyframe_buffer)\n",
+    )
+    init_state_hook = "            states.set_frame(frame)\n            i += 1\n            continue\n"
+    if source_text.count(init_state_hook) != 1:
+        parser.error("upstream initialization section changed; review the low-VRAM synchronization")
+    source_text = source_text.replace(
+        init_state_hook,
+        "            states.set_frame(frame)\n"
+        "            if args.low_vram:\n"
+        "                torch.cuda.empty_cache()\n"
+        "                while True:\n"
+        '                    if not backend.is_alive():\n'
+        '                        raise RuntimeError("backend process died during initialization")\n'
+        "                    with states.lock:\n"
+        "                        if len(states.global_optimizer_tasks) == 0:\n"
+        "                            break\n"
+        "                    time.sleep(0.01)\n"
+        "            i += 1\n            continue\n",
+    )
+    if source_text.count("        if add_new_kf:\n            keyframes.append(frame)\n") != 1:
+        parser.error("upstream new-keyframe section changed; review the low-VRAM cache guard")
+    source_text = source_text.replace(
+        "        if add_new_kf:\n            keyframes.append(frame)\n",
+        "        if add_new_kf:\n"
+        "            if args.low_vram:\n"
+        "                torch.cuda.empty_cache()\n"
+        "            keyframes.append(frame)\n",
+    )
+    backend_solve_hook = (
+        '        if config["use_calib"]:\n'
+        "            factor_graph.solve_GN_calib()\n"
+        "        else:\n"
+        "            factor_graph.solve_GN_rays()\n\n"
+        "        with states.lock:\n"
+    )
+    if source_text.count(backend_solve_hook) != 1:
+        parser.error("upstream backend optimization section changed; review the cache release hook")
+    source_text = source_text.replace(
+        backend_solve_hook,
+        backend_solve_hook.replace(
+            "\n\n        with states.lock:",
+            '\n        if cfg.get("release_backend_cuda_cache", False):\n'
+            "            torch.cuda.empty_cache()\n\n        with states.lock:",
+        ),
+    )
     drain_hook = "        if i == len(dataset):\n            states.set_mode(Mode.TERMINATED)\n"
     if source_text.count(drain_hook) != 1:
         parser.error("upstream main.py has an unsupported end-of-sequence section")
@@ -86,6 +169,8 @@ def main() -> int:
         "                        pending = len(states.global_optimizer_tasks) > 0 or states.reloc_sem.value > 0\n"
         "                    if not pending:\n"
         "                        break\n"
+        '                    if not backend.is_alive():\n'
+        '                        raise RuntimeError("backend process died before final export")\n'
         "                    time.sleep(0.01)\n"
         "            states.set_mode(Mode.TERMINATED)\n"
     )
@@ -127,6 +212,8 @@ def main() -> int:
         "--config", str(effective_config),
         "--save-as", str(upstream_output),
         "--no-viz",
+        "--keyframe-buffer", str(args.keyframe_buffer),
+        "--low-vram",
     ]
     if calib is not None:
         command.extend(("--calib", str(calib)))
@@ -143,6 +230,7 @@ def main() -> int:
         + ([previous_pythonpath] if previous_pythonpath else [])
     )
     env["SEMANTIC_REGION_EXPORT_DIR"] = str(pointmap_output)
+    env.setdefault("TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD", "1")
     provenance = {
         "command": command,
         "cwd": str(upstream),
@@ -155,11 +243,31 @@ def main() -> int:
         "generated_launcher_sha256": sha256(launcher),
         "upstream_root": str(upstream),
         "python": str(python_path),
+        "keyframe_buffer": args.keyframe_buffer,
+        "low_vram": True,
+        "torch_force_no_weights_only_load": env["TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"],
+        "gpu_memory_monitor": "nvidia-smi sampled at 200ms; host-wide memory.used",
         "export_hook": "after final frame loop, before stock save_reconstruction; requires single_thread",
     }
     provenance_path = artifacts_dir / "run_arguments.json"
     provenance_path.write_text(json.dumps(provenance, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    completed = subprocess.run(command, cwd=upstream, env=env, check=False)
+    memory_csv = artifacts_dir / "gpu_memory.csv"
+    started = time.monotonic()
+    with memory_csv.open("w", encoding="utf-8") as memory_stream:
+        monitor = subprocess.Popen(
+            ["nvidia-smi", "--query-gpu=timestamp,memory.used,utilization.gpu", "--format=csv,noheader", "--loop-ms=200"],
+            stdout=memory_stream,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        completed = subprocess.run(command, cwd=upstream, env=env, check=False)
+        monitor.terminate()
+        try:
+            monitor.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            monitor.kill()
+            monitor.wait()
+    elapsed_seconds = time.monotonic() - started
     if completed.returncode != 0:
         return completed.returncode
 
@@ -169,7 +277,24 @@ def main() -> int:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("keyframe_count", 0) < 1:
         raise RuntimeError("no keyframes were exported")
+    memory_values = []
+    with memory_csv.open(encoding="utf-8") as memory_stream:
+        for row in csv.reader(memory_stream):
+            if len(row) >= 2:
+                match = re.match(r"\s*(\d+)", row[1])
+                if match:
+                    memory_values.append(int(match.group(1)))
+    performance = {
+        "elapsed_seconds": elapsed_seconds,
+        "gpu_memory_sample_count": len(memory_values),
+        "gpu_memory_peak_mib_host_wide": max(memory_values) if memory_values else None,
+        "gpu_memory_monitor_file": memory_csv.name,
+    }
+    (artifacts_dir / "performance.json").write_text(
+        json.dumps(performance, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     print(f"Exported {manifest['keyframe_count']} keyframes to {pointmap_output}")
+    print(json.dumps(performance, sort_keys=True))
     return 0
 
 
