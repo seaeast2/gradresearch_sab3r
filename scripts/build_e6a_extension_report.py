@@ -14,7 +14,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 RUNS = ROOT / "runs" / "semantic_region_pointmap"
 PRIMARY_STAGES = (
-    "E0_environment", "E0a_preflight", "E1a_multikeyframe_slam_export",
+    "E0a_preflight", "E1a_multikeyframe_slam_export",
     "E2a_multikeyframe_semantics", "E3a_temporal_region_association",
     "E4a_error_guided_local_refinement", "E5a_multikeyframe_gt_evaluation",
 )
@@ -126,6 +126,7 @@ def collect_run(run_id: str, required_stages: tuple[str, ...]) -> dict[str, Any]
         "experiment_name": run_meta.get("experiment_name"),
         "run_config_sha256": run_meta.get("config_sha256"),
         "project_commit": run_meta.get("project", {}).get("commit"),
+        "stage_statuses": run_meta.get("stages", {}),
         "stages": stages,
         "metrics": metrics,
     }
