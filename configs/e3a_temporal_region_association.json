@@ -1,0 +1,17 @@
+{
+  "region_build": {
+    "max_neighbor_distance_over_local_spacing": 3.0,
+    "max_unsigned_normal_angle_degrees": 45.0
+  },
+  "association": {
+    "min_region_pixels": 100,
+    "sample_limit_per_region": 2048,
+    "max_point_distance_over_global_spacing": 4.0,
+    "min_mutual_correspondence_pixels": 30,
+    "min_bidirectional_correspondence_overlap_fraction": 0.15,
+    "max_unsigned_normal_angle_degrees": 45.0,
+    "max_plane_offset_over_global_spacing": 4.0,
+    "max_planarity_ratio": 0.12
+  },
+  "protocol_note": "Following CCGS, build pointmap correspondences by nearest 3D point matching, score region overlap from reciprocal pixel matches, and use one-to-one Hungarian assignment with partial-match rejection. Initial thresholds are exploratory only and require scene-level validation before test scenes."
+}
