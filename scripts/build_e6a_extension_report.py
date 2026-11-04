@@ -329,7 +329,7 @@ def main() -> int:
         "The E5a main comparisons show very small and mixed B1–B3 changes; the pre-set 10% RMSE improvement target was not reached. No positive H1–H3 claim is supported by these results.",
         "The three H4 factor ablations show small, scene-dependent changes. Huber versus squared loss and confidence versus uniform weights do not show a consistent scene-level accuracy advantage; halving the displacement bound preserves the configured safety limit but does not yield consistent metric gains.",
         "The local point-to-plane objective can improve while GT scene metrics remain unchanged or worsen. E4a rollback and exact non-target invariants are part of the result, not omitted failures.",
-        "B4 Oracle and mesh point-to-surface evaluation were unavailable from the supplied Replica exports. E3a accepted edge counts have not been verified against GT associations.",
+        "B4 Oracle is unavailable because the supplied exports have no GT semantic/plane masks. E5a used paired GT depth and point-cloud surface F-score; the office2 mesh was not used for triangle point-to-surface scoring, and no matching meshes were found for room1/office1. E3a accepted edge counts have not been verified against GT associations.",
     ]
     payload = {
         "stage": "E6a_extension_report", "status": "completed",
@@ -343,8 +343,17 @@ def main() -> int:
         "conclusions": conclusions,
         "optional_3dgs_feasibility": {
             "status": "deferred; prerequisites not yet pinned",
+            "office2_mesh_asset": {
+                "path": "/home/hlee221212/works/gradresearch/data/N2/Replica/office2_mesh.ply",
+                "sha256": "b5cd58e54584a5f244ea0c8e02e0a0e1853de287acc95327a8c863f7b8c3e4e8",
+                "size_bytes": 37766479,
+                "vertex_count": 858623,
+                "face_count": 857845,
+                "properties": ["xyz", "normal", "RGB color"],
+                "semantic_or_instance_labels": False,
+            },
             "evidence": [
-                "Replica RGB sequences, trajectories, and paired depth are present; office2 also has an `office2_mesh.ply` asset.",
+                "Replica RGB sequences, trajectories, and paired depth are present. An office2 mesh is available (hash and header recorded above), but no matching mesh was found for the room1/office1 test scenes and the mesh has no semantic labels.",
                 "The workspace has no checked-out 3DGS training/rasterizer implementation, and the SAB3R Python environment cannot import `gsplat`, `diff_gaussian_rasterization`, or `simple_knn`.",
                 "No matched Gaussian initialization/training protocol, held-out rendering split, or Gaussian outlier/ghost annotation is configured. Installing and validating that stack would be a separate substantial experiment, so the optional E6 was not run in this E1a–E6a cycle.",
                 "No claim is made that pointmap refinement reduces Gaussian outliers or improves rendering quality. Revisit E6 only after pinning a 3DGS implementation and protocol on validation scenes.",
