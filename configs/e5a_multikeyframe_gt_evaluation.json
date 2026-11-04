@@ -1,6 +1,5 @@
 {
   "stage": "E5a_multikeyframe_gt_evaluation",
-  "scene_split": "validation",
   "ground_truth_use": "evaluation only; no Replica depth, camera trajectory, or GT geometry is read by E1a-E4a selection/refinement",
   "depth_resampling": "nearest neighbor to MASt3R-SLAM long-edge-512 resize and center crop",
   "gt_world_transform": "per-frame Replica camera-to-world pose from traj.txt",

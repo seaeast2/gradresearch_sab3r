@@ -275,6 +275,8 @@ def main() -> int:
     parser.add_argument("--camera-params",type=Path,required=True)
     parser.add_argument("--depth-root",type=Path,required=True)
     parser.add_argument("--trajectory",type=Path,required=True)
+    parser.add_argument("--scene-id",required=True)
+    parser.add_argument("--scene-split",choices=("validation","test","qualitative"),required=True)
     parser.add_argument("--config",type=Path,required=True)
     parser.add_argument("--output",type=Path,required=True)
     args=parser.parse_args()
@@ -424,7 +426,7 @@ def main() -> int:
         precision=float(np.mean(dpg<=tau));recall=float(np.mean(dgp<=tau))
         fscore[name]={"precision_at_5cm":precision,"recall_at_5cm":recall,"fscore_at_5cm":2*precision*recall/max(precision+recall,1e-12),"predicted_points":len(pred_cloud),"gt_points":len(gt_cloud)}
 
-    summary={"stage":"E5a_multikeyframe_gt_evaluation","status":"completed","scene":"Replica/room0",
+    summary={"stage":"E5a_multikeyframe_gt_evaluation","status":"completed","scene":args.scene_id,"scene_split":args.scene_split,
              "keyframe_count":len(frames),"keyframes":records,"source_manifests":{
                  "e1a_sha256":sha256(e1/'pointmaps/export_manifest.json'),"e2a_sha256":sha256(e2/'keyframes_manifest.json'),
                  "e3a_sha256":sha256(e3/'temporal_regions.json'),"e4a_sha256":sha256(e4/'refinement_summary.json')},
