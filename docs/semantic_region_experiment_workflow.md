@@ -52,6 +52,7 @@ runs/semantic_region_pointmap/<run-id>/
 ├── run.json
 └── stages/
     ├── E0_environment/{manifest.json,artifacts/,logs/}
+    ├── E0a_preflight/{manifest.json,artifacts/,logs/}
     ├── E1_slam_export/{manifest.json,artifacts/,logs/}
     ├── E2_sab3r_semantics/{manifest.json,artifacts/,logs/}
     ├── E3_region_build/{manifest.json,artifacts/,logs/}
@@ -63,12 +64,15 @@ runs/semantic_region_pointmap/<run-id>/
 | 단계 | 입력 | 독립 산출물 예시 | 진행 게이트 |
 |---|---|---|---|
 | E0 환경 | 설정, 외부 체크아웃 | 환경·GPU·commit 정보 | 서로 다른 모델 환경과 버전 기록 확인 |
+| E0a E1 사전 점검 | 호스트 GPU, 고정 upstream, 모델 Python, 짧은 RGB 입력 | `preflight.json`, 입력 hash manifest | GPU/CUDA, import, checkpoint, config, 데이터 경로 확인; 추론은 수행하지 않음 |
 | E1 SLAM export | RGB 시퀀스 | 최종 Pose, Pointmap, confidence, pixel mapping | RGB overlay, 좌표계, Sim(3) scale 검증 |
 | E2 SAB3R 의미 | Keyframe RGB | 원본 semantic score/mask, 색상 overlay | 출력 해상도 및 crop/resize 정합 확인 |
 | E3 Region | E1 export + E2 mask | frame-wise 및 global Region, merge 기록 | 깊이/법선 분리, 오병합 사례 기록 |
 | E4 보정 | Region + 고정 Pointmap | 보정 Pointmap, displacement, 실패 사유 | 대상 외 점 불변, 변위 제한 확인 |
 | E5 GT 평가 | 원본/보정 Pointmap + 평가 전용 GT | per-region 및 per-scene 지표 | split/config 고정, GT 입력 누설 방지 |
 | E6 보고 | 지표·로그·실패 사례 | 표·그림·결론 초안 | 모든 run과 입력 hash 추적 가능 |
+
+실제 E0a 점검은 [E0a 사전 점검 결과](experiments/E0a_preflight/E0a-readiness-20261104-002.md)에 기록했습니다. 통과 판정은 사전 환경 확인이며 SLAM 추론 성공을 의미하지 않습니다.
 
 각 단계의 명령은 공통 runner를 통해 호출합니다. runner는 그 단계의 `logs/command.log`에 로그를 남기고 상태를 기록하며, 해당 단계의 `artifacts/`만 입력/출력 경로로 사용합니다.
 

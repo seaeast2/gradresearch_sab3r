@@ -17,6 +17,7 @@
   },
   "stages": [
     "E0_environment",
+    "E0a_preflight",
     "E1_slam_export",
     "E2_sab3r_semantics",
     "E3_region_build",

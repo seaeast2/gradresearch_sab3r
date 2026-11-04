@@ -132,7 +132,16 @@ def main() -> int:
         command.extend(("--calib", str(calib)))
     env = os.environ.copy()
     previous_pythonpath = env.get("PYTHONPATH", "")
-    env["PYTHONPATH"] = str(ROOT / "src") + (os.pathsep + previous_pythonpath if previous_pythonpath else "")
+    source_paths = [
+        ROOT / "src",
+        upstream,
+        upstream / "thirdparty" / "mast3r",
+        upstream / "thirdparty" / "in3d",
+    ]
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(path) for path in source_paths if path.exists()]
+        + ([previous_pythonpath] if previous_pythonpath else [])
+    )
     env["SEMANTIC_REGION_EXPORT_DIR"] = str(pointmap_output)
     provenance = {
         "command": command,
