@@ -1,0 +1,14 @@
+{
+  "stage": "E3_region_build",
+  "input_policy": "reuse frozen E1 pointmap and E2 raw-score argmax labels; no GT input",
+  "connectivity": 4,
+  "geometry_gate": {
+    "max_neighbor_distance_over_local_spacing": 3.0,
+    "max_unsigned_normal_angle_degrees": 45.0,
+    "normal_estimator": "central finite differences on the world pointmap; unsigned angle uses abs(dot)",
+    "local_spacing": "median same-label valid 4-neighbor edge length at each endpoint; fallback to scene median"
+  },
+  "validity": "E1 valid mask, finite world point and finite positive geometry confidence",
+  "threshold_status": "initial pilot settings from the experiment plan; not validation-tuned",
+  "temporal_association": "deferred when fewer than two keyframes are available"
+}

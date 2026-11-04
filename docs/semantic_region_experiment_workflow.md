@@ -8,7 +8,7 @@
 - `bash scripts/bootstrap_model_envs.sh`는 `.venvs/mast3r-slam`과 `.venvs/sab3r`를 생성하지만, 패키지는 설치하지 않습니다. CUDA 호환성은 두 upstream의 고정 버전을 확인한 뒤 각 환경에 따로 설치합니다.
 - `MAST3R_SLAM_ROOT`, `SAB3R_ROOT` 환경 변수에 각 외부 체크아웃 경로를 지정합니다.
 - 데이터 경로와 체크포인트 경로는 공유 설정에 박아 넣지 않습니다. 실행 명령이 받도록 하고, run config에 실제 식별자와 해시를 기록합니다.
-- `scripts/experiment.py`는 실험 디렉터리와 provenance 기록을 관리합니다. E1은 `scripts/run_slam_export.sh`로, E2는 `scripts/run_e2_sab3r_semantics.sh`로 고정 upstream을 실행합니다. E3–E6은 아직 연결되지 않았습니다.
+- `scripts/experiment.py`는 실험 디렉터리와 provenance 기록을 관리합니다. E1은 `scripts/run_slam_export.sh`로, E2는 `scripts/run_e2_sab3r_semantics.sh`로 고정 upstream을 실행합니다. E3는 E1/E2 고정 산출물에서 frame-wise Region을 생성합니다. E4–E6은 아직 연결되지 않았습니다.
 
 ### GPU/CUDA 확인 위치
 
@@ -78,7 +78,9 @@ runs/semantic_region_pointmap/<run-id>/
 
 실제 E2 SAB3R 의미 추론은 [E2 결과 보고서](experiments/E2_sab3r_semantics/E2-replica-office0-pilot.md)에 기록했습니다. E1 keyframe과 픽셀 격자를 맞춘 단일 프레임 파일럿이며, class score/mask는 후속 Region 구현용 후보 결과입니다.
 
-공통 runner는 그 단계의 `logs/command.log`에 로그를 남기고 상태를 기록하며, 해당 단계의 `artifacts/`만 출력 경로로 사용합니다. E1 전용 runner는 MASt3R-SLAM CLI와 배열 export를 연결하고, E2 전용 runner는 SAB3R semantic score/mask를 생성합니다. E3–E6은 각 전용 실행기를 추가해야 합니다.
+실제 E3 frame-wise Region 생성은 [E3 결과 보고서](experiments/E3_region_build/E3-replica-office0-pilot.md)에 기록했습니다. 단일 Keyframe 입력이라 temporal association은 수행하지 않았습니다.
+
+공통 runner는 그 단계의 `logs/command.log`에 로그를 남기고 상태를 기록하며, 해당 단계의 `artifacts/`만 출력 경로로 사용합니다. E1 전용 runner는 MASt3R-SLAM CLI와 배열 export를 연결하고, E2 전용 runner는 SAB3R semantic score/mask를 생성하며, E3 전용 runner는 semantic·geometry 연결 성분과 Region 통계를 저장합니다. E4–E6은 각 전용 실행기를 추가해야 합니다.
 
 ```bash
 bash scripts/run_slam_export.sh \\
@@ -92,6 +94,15 @@ E2는 완료된 E1 export가 있는 run에서 실행합니다. 첫 인자는 E2 
 
 ```bash
 bash scripts/run_e2_sab3r_semantics.sh E2-replica-office0-20261104-001 E0a-readiness-20261104-002
+```
+
+E3은 결과 run ID, E1 입력 run ID, E2 입력 run ID를 순서대로 받습니다.
+
+```bash
+bash scripts/run_e3_region_build.sh \\
+  E3-replica-office0-20261104-001 \\
+  E0a-readiness-20261104-002 \\
+  E2-replica-office0-20261104-001
 ```
 
 단계 완료 후 manifest에 산출물 SHA-256이 기록됩니다. 단계는 성공·실패 모두 같은 run에서 재실행할 수 없으므로 변경/재실험은 새 run ID로 분리합니다. 실패 시 원인과 부분 산출물을 보존합니다.
@@ -120,4 +131,4 @@ bash scripts/run_slam_export.sh \\
 4. 소형 시퀀스로 E1만 수행합니다. export 형식과 RGB/기하 정합을 확인하기 전에는 후속 단계를 시작하지 않습니다.
 5. 검증된 동일 E1 산출물을 고정 입력으로 E2 이후 비교군에 재사용합니다. 모든 비교군은 별도의 run ID와 stage 경로를 씁니다.
 
-환경 자동 설치는 upstream별 CUDA/의존성 조합을 확인한 뒤 별도 설치 스크립트로 추가합니다. E1의 MASt3R-SLAM export와 E2의 SAB3R semantic 추론은 연결·실행했습니다. Region/geometry/evaluation 코드는 아직 연결하지 않았습니다.
+환경 자동 설치는 upstream별 CUDA/의존성 조합을 확인한 뒤 별도 설치 스크립트로 추가합니다. E1의 MASt3R-SLAM export, E2의 SAB3R semantic 추론, E3의 frame-wise Region 생성은 연결·실행했습니다. geometry refinement/evaluation 코드는 아직 연결하지 않았습니다.
