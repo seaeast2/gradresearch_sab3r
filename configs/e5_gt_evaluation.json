@@ -1,0 +1,11 @@
+{
+  "stage": "E5_gt_evaluation",
+  "ground_truth_use": "evaluation only; no GT input to E3 segmentation or E4 region selection/refinement",
+  "depth_source": "Replica office0 depth frame paired with E1 keyframe frame_id",
+  "depth_resampling": "nearest neighbor using DUSt3R long-edge-512 resize and 16-pixel-compatible center crop geometry",
+  "metric": "same-pixel Euclidean distance between pointmap point and GT depth backprojection after one global Sim(3) fit on B0 only",
+  "sim3_fit_pixels": "deterministic 2x2 checker lattice, then reuse transform for every method",
+  "primary_subsets": ["all_valid_correspondences", "semantic_plane_candidates", "modified_points", "unmodified_points"],
+  "outlier_threshold_m": 0.05,
+  "threshold_status": "descriptive pilot threshold; no validation selection or efficacy claim"
+}
