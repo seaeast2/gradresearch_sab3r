@@ -191,8 +191,9 @@ def main() -> int:
     effective_config = launcher_dir / "experiment_config.yaml"
     if effective_config.exists():
         parser.error(f"effective config already exists; use a new run ID: {effective_config}")
+    calibration_override = "use_calib: true\n" if calib is not None else ""
     effective_config.write_text(
-        f"inherit: {json.dumps(str(config))}\nsingle_thread: true\n",
+        f"inherit: {json.dumps(str(config))}\nsingle_thread: true\n{calibration_override}",
         encoding="utf-8",
     )
     launcher = launcher_dir / "main.py"
