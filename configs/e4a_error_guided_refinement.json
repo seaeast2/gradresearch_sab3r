@@ -23,6 +23,7 @@
   "refinement": {
     "parameterization": "bounded radial depth along each fixed Keyframe camera ray; pose and non-target points remain fixed",
     "loss": "confidence-weighted Huber IRLS with displacement prior",
+    "robust_loss": "huber",
     "huber_delta_over_global_spacing": 2.0,
     "displacement_prior_lambda": 1.0,
     "maximum_radial_displacement_over_global_spacing": 2.0,

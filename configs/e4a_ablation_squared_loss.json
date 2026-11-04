@@ -1,0 +1,35 @@
+{
+  "stage": "E4a_error_guided_local_refinement",
+  "selection_signal": "90th percentile of mutual nearest 3D pointmap correspondence distance for an accepted temporal Region link, normalized by that scene's E3a global median local spacing",
+  "frozen_error_threshold_spacing_ratio": 2.04,
+  "threshold_derivation": {
+    "method": "90th percentile across accepted adjacent-Keyframe Region-link scores from scene-level validation runs; no GT labels or test scenes used",
+    "validation_scene_count": 2,
+    "accepted_validation_links": 18,
+    "validation_sources": [
+      {"scene": "Replica/office0", "run_id": "E3a-temporal-association-20261104-001", "temporal_regions_sha256": "6e4438b9be54a549ad6af5c38723b69662cd3a5f03ef4bd1da9b0b9f409ab7c1"},
+      {"scene": "Replica/room0", "run_id": "E1a-replica-room0-validation-20261104-001", "temporal_regions_sha256": "12b83d13e8c16fa271d27cf2c6c8e61c77d6c4f3884559c3497bb02eddc8ec31"}
+    ]
+  },
+  "eligibility": {
+    "candidate_semantic_labels": ["floor", "wall", "ceiling"],
+    "minimum_observations": 2,
+    "minimum_total_region_pixels": 500,
+    "minimum_mutual_correspondences": 200,
+    "maximum_pca_smallest_eigenvalue_ratio": 0.12,
+    "minimum_ransac_inlier_fraction": 0.85
+  },
+  "plane_fit": {"iterations": 512, "inlier_distance_over_global_spacing": 2.0, "seed": 0},
+  "refinement": {
+    "parameterization": "bounded radial depth along each fixed Keyframe camera ray; pose and non-target points remain fixed",
+    "loss": "confidence-weighted squared loss with displacement prior; Huber reweighting disabled",
+    "robust_loss": "squared",
+    "huber_delta_over_global_spacing": 2.0,
+    "displacement_prior_lambda": 1.0,
+    "maximum_radial_displacement_over_global_spacing": 2.0,
+    "boundary_freeze_pixels": 2,
+    "minimum_relative_plane_rmse_improvement": 0.01,
+    "confidence_weights": "confidence_avg divided by scene median, clipped to [0.1, 10]"
+  },
+  "protocol_note": "Frozen H4 ablation config: only robust loss changes from the Huber baseline; selection, plane gates, confidence weights, displacement bound, and rollback gate remain fixed."
+}

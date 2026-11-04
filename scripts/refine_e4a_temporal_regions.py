@@ -155,8 +155,14 @@ def main() -> int:
     plane_threshold = float(config["plane_fit"]["inlier_distance_over_global_spacing"]) * spacing
     max_delta = float(config["refinement"]["maximum_radial_displacement_over_global_spacing"]) * spacing
     huber_delta = float(config["refinement"]["huber_delta_over_global_spacing"]) * spacing
+    robust_loss = str(config["refinement"].get("robust_loss", "huber"))
+    if robust_loss not in {"huber", "squared"}:
+        raise ValueError(f"unsupported robust_loss: {robust_loss}")
     prior_lambda = float(config["refinement"]["displacement_prior_lambda"])
     boundary_px = int(config["refinement"]["boundary_freeze_pixels"])
+    confidence_mode = str(config["refinement"].get("confidence_weights", "confidence_avg divided by scene median, clipped to [0.1, 10]"))
+    if confidence_mode not in {"uniform", "confidence_avg divided by scene median, clipped to [0.1, 10]"}:
+        raise ValueError(f"unsupported confidence_weights mode: {confidence_mode}")
     conf_values = np.concatenate([k["data"]["confidence_avg"][k["valid"]].astype(np.float64) for k in keyframes if k["valid"].any()])
     conf_scale = max(float(np.median(conf_values)), 1e-6)
     candidates = []
@@ -246,11 +252,17 @@ def main() -> int:
             if not len(yy):
                 continue
             confidence = frame["data"]["confidence_avg"][yy, xx].astype(np.float64)
-            weights = np.clip(confidence / conf_scale, 0.1, 10.0)
+            if confidence_mode == "uniform":
+                weights = np.ones_like(confidence)
+            else:
+                weights = np.clip(confidence / conf_scale, 0.1, 10.0)
             depth = depth0.copy()
             for _ in range(8):
                 residual = a * depth + b
-                robust = np.minimum(1.0, huber_delta / np.maximum(np.abs(residual), 1e-12))
+                if robust_loss == "huber":
+                    robust = np.minimum(1.0, huber_delta / np.maximum(np.abs(residual), 1e-12))
+                else:
+                    robust = np.ones_like(residual)
                 numerator = weights * robust * a * (-b) + prior_lambda * depth0
                 denominator = weights * robust * a * a + prior_lambda
                 depth = np.clip(numerator / np.maximum(denominator, 1e-12), depth0 - max_delta, depth0 + max_delta)
