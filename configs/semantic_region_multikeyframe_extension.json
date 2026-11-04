@@ -1,0 +1,36 @@
+{
+  "experiment_name": "semantic_region_pointmap_multikeyframe_extension",
+  "run_root": "runs/semantic_region_pointmap",
+  "dataset_id": "multikeyframe_scene_extension",
+  "scene_ids": [],
+  "random_seed": 0,
+  "models": {
+    "mast3r_slam_path_env": "MAST3R_SLAM_ROOT",
+    "sab3r_path_env": "SAB3R_ROOT",
+    "mast3r_slam_python_env": "MAST3R_SLAM_PYTHON",
+    "sab3r_python_env": "SAB3R_PYTHON",
+    "mast3r_slam_python": ".venvs/mast3r-slam/bin/python",
+    "sab3r_python": ".venvs/sab3r/bin/python",
+    "mast3r_slam_commit": "",
+    "sab3r_commit": "",
+    "checkpoint_id": ""
+  },
+  "stages": [
+    "E0_environment",
+    "E0a_preflight",
+    "E1a_multikeyframe_slam_export",
+    "E2a_multikeyframe_semantics",
+    "E3a_temporal_region_association",
+    "E4a_error_guided_local_refinement",
+    "E5a_multikeyframe_gt_evaluation",
+    "E6a_extension_report"
+  ],
+  "policy": {
+    "never_overwrite_run": true,
+    "separate_model_environments": true,
+    "gt_for_evaluation_only": true,
+    "slam_pose_fixed_during_refinement": true,
+    "scene_level_split": true,
+    "temporal_merge_requires_geometry_or_correspondence": true
+  }
+}

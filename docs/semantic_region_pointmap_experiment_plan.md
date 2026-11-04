@@ -481,6 +481,49 @@ RMSE_{GT}(R)=\sqrt{\frac{1}{|R|}\sum_{i\in R}d(p_i,M_{GT})^2}.
 
 ---
 
+### 다음 실행 확장 — 연속 Keyframe의 temporal Region 병합 및 오차 유도 보정 (E1a–E6a)
+
+이 확장은 현재 실행 워크플로의 E1–E6 단계 코드에 알파벳 접미사를 붙인다. 아래 E1a–E6a는 **실행 워크플로 코드**이며, 앞 절의 연구 질문별 실험 E1–E6(의미 분할, Connected Region, 합성 왜곡, 실제 SLAM 비교, 안전성, 선택적 3DGS)를 대체하지 않는다. 이번 단일 Keyframe 파일럿에서 빠진 다중 시점 연결을 구현하고, 오류 후보 Region의 선택적 보정을 검증한다.
+
+#### 연구 질문
+
+1. 연속 RGB 시퀀스에서 만들어진 복수 MASt3R-SLAM Keyframe에 SAB3R tag를 부여하고, 같은 물리 표면을 오병합 없이 persistent Region으로 연결할 수 있는가?
+2. 다중 시점 기하 불일치가 큰 Region을 선별해 국소 보정하면, 프레임별 독립 Region(B2)보다 GT 기하 오차가 낮아지는가?
+3. 이 결과가 실내 한 장면에 한정되지 않고 다른 장면 유형에서도 재현되는가?
+
+#### 확장 단계와 완료 게이트
+
+| 코드 | 단계 | 처리와 분리 산출물 | 완료 게이트 |
+|---|---|---|---|
+| E1a | 다중 Keyframe SLAM export | 연속 RGB의 최종 Pose, Keyframe별 pointmap/confidence/RGB, frame correspondence, 입력·코드 hash | 유효 Keyframe 2개 이상, 동일 표면 재관측, pixel·world 좌표 정합 확인 |
+| E2a | Keyframe별 SAB3R tagging | 각 Keyframe의 score, tag, score margin, void mask, 전처리·hash | 동일 label/prompt/전처리로 모든 Keyframe 처리, 픽셀 대응 검증 |
+| E3a | temporal Region association/merge | frame-local Region ID와 persistent ID 대응, 채택·기각 edge, merge/split history, 시각화 | 반복 관측된 같은 표면 연결, 분리 표면/직각 벽 분리, ID 안정성과 오병합 기록 |
+| E4a | 오류 후보 기반 국소 최적화 | validation에서 고정한 품질 점수, 후보·제외 사유, 보정 전후 pointmap, 변위·로그 | 비대상 점 변화 0, 변위 제한 준수, 적용률·실패율 보고, 원본 복구 가능 |
+| E5a | 다중 시점 GT 평가 | 동일 SLAM export의 B0–B3 결과, scene/region metric, error visualization | GT surface RMSE와 completeness/F-score/outlier/normal/boundary 지표 기록 |
+| E6a | 확장 결과 보고 | E1a–E5a manifest 및 hash를 검증한 요약 | B2/B3 비교, 장면별 결과, 실패 사례와 한계 포함 |
+
+#### 시퀀스와 장면 설계
+
+- E1a는 validation에서 정한 Keyframe 설정으로 연속 RGB를 처리한다. 최소 2개 Keyframe을 만들고, 관심 표면이 서로 다른 시점에서 반복 관측되어야 한다. 기존 30프레임 파일럿은 Keyframe 하나만 생성했으므로 E1a 성공 자료로 간주하지 않는다.
+- 독립된 sequence/scene 3개 이상을 목표로 하고 실내 외에 개방형 또는 야외 장면을 포함한다. 확보한 GT geometry가 부족한 장면은 추적·정성 결과로 분리하고 주요 정확도 집계에 넣지 않는다. 목표 수를 채우지 못하면 실제 수와 한계를 보고한다.
+- 데이터 split과 Keyframe/association/error-score 임계값은 scene 단위로 나누고 validation에서 고정한다. 같은 장면의 프레임을 train/validation/test 독립 표본처럼 세지 않는다.
+
+#### Semantic tag와 persistent Region ID
+
+SAB3R의 `wall`, `floor` 등은 의미 tag이며, persistent Region ID는 같은 물리 표면을 나타내는 별도 식별자다. tag가 같다는 이유만으로 병합하지 않는다. 후보 연결은 공통 World 좌표 overlap, MASt3R-SLAM 대응점, 법선·평면 일관성, 양방향 점군 근접도와 가림 충돌을 함께 본다. 근거가 부족하거나 상충하면 `deferred`로 두고 자동 병합하지 않는다. 병합 뒤 평면 inlier와 표면 일관성을 재검사하며, 품질이 악화되면 연결 edge를 취소하고 분리한다.
+
+#### 오류 후보 선정과 보정
+
+- test GT를 보정 대상 선정에 사용하지 않는다. 후보 점수는 validation에서 동결한 SLAM confidence, 다중 시점 대응 residual, cross-view 3D consistency, plane residual과 normal dispersion 등 추론 시 이용 가능한 신호로 만든다. 이 점수는 GT 오차의 대체 지표가 아니다.
+- 큰 residual만으로 비평면이나 혼합 Region을 평탄화하지 않는다. 평면성, 최소 관측 수, inlier 비율, semantic uncertainty를 통과하지 못한 후보는 `ineligible` 또는 `deferred`로 기록한다.
+- 기존 SLAM Pose와 비대상 점은 고정하고 선택 Region 내부만 robust, bounded 최적화한다. ray-constrained displacement와 boundary freeze를 적용하고, held-out/GT 평가가 악화되거나 제한을 넘은 후보는 실패로 보존한다.
+
+#### 비교군과 분석
+
+- B0: 원본 SLAM. B1: geometry-only Region. B2: SAB3R tag와 frame-local Region, temporal merge 없음. B3: semantic·기하·시점 대응으로 연결한 persistent Region. B4 Oracle은 평가 전용 GT mask가 확보될 때만 별도 상한으로 추가한다.
+- 주 비교는 B2 대 B3이며, 모든 방법은 같은 E1a export, 같은 optimizer, 같은 평가 mask와 B0에서 계산한 공통 Sim(3)를 사용한다. Region ID 안정성, over/under-merge, 잘못된 association edge, 대상 surface RMSE, completeness, F-score, outlier, normal error와 boundary gap을 함께 기록한다.
+- 결론은 scene 단위 결과로 낸다. 실내 단일 장면 성공만으로 일반화하지 않고, 각 환경의 결과와 실패 사례를 모두 보고한다.
+
 ## 12. 데이터 기록과 분석 통계
 
 ### 12.1 평가 단위
@@ -677,6 +720,8 @@ gradresearch_sab3r/                  # 공식 연구 저장소 (예정 구조)
 **MVP 2 — 다중 Keyframe Static Map:** MASt3R-SLAM의 최종 World Pointmap에 의미 mask를 합성하고 2개 이상 Keyframe의 같은 평면 Region을 병합. 동일 평면 중복 관측을 검증한다.
 
 **MVP 3 — 논문 핵심:** B0 원본, B1 geometry-only, B2 semantic no-merge, B3 semantic temporal-merge를 실행하고 **GT 기준 대상 평면 오차**를 비교한다. B4 Oracle은 가능할 때 진행한다.
+
+**다음 실행 확장:** 위 MVP2/MVP3를 위한 연속 Keyframe tag/Region 병합 및 오차 유도 국소 보정을 E1a–E6a로 구체화했다. 단계 정의와 안전 gate는 이 절 앞의 “다음 실행 확장 — 연속 Keyframe의 temporal Region 병합 및 오차 유도 보정”을 따른다.
 
 **선택 확장:** semantic confidence calibration, adaptive local planar patches, 3DGS 후속 비교.
 

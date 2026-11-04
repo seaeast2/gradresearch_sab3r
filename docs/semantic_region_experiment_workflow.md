@@ -59,6 +59,16 @@ runs/semantic_region_pointmap/<run-id>/
     ├── E4_geometry_refinement/{manifest.json,artifacts/,logs/}
     ├── E5_gt_evaluation/{manifest.json,artifacts/,logs/}
     └── E6_report/{manifest.json,artifacts/,logs/}
+
+runs/semantic_region_pointmap/<extension-run-id>/stages/
+    ├── E0_environment/{manifest.json,artifacts/,logs/}
+    ├── E0a_preflight/{manifest.json,artifacts/,logs/}
+    ├── E1a_multikeyframe_slam_export/{manifest.json,artifacts/,logs/}
+    ├── E2a_multikeyframe_semantics/{manifest.json,artifacts/,logs/}
+    ├── E3a_temporal_region_association/{manifest.json,artifacts/,logs/}
+    ├── E4a_error_guided_local_refinement/{manifest.json,artifacts/,logs/}
+    ├── E5a_multikeyframe_gt_evaluation/{manifest.json,artifacts/,logs/}
+    └── E6a_extension_report/{manifest.json,artifacts/,logs/}
 ```
 
 | 단계 | 입력 | 독립 산출물 예시 | 진행 게이트 |
@@ -71,6 +81,12 @@ runs/semantic_region_pointmap/<run-id>/
 | E4 보정 | Region + 고정 Pointmap | 보정 Pointmap, displacement, 실패 사유 | 대상 외 점 불변, 변위 제한 확인 |
 | E5 GT 평가 | 원본/보정 Pointmap + 평가 전용 GT | per-region 및 per-scene 지표 | split/config 고정, GT 입력 누설 방지 |
 | E6 보고 | 지표·로그·실패 사례 | 표·그림·결론 초안 | 모든 run과 입력 hash 추적 가능 |
+| E1a 다중 Keyframe export | 여러 시점을 포함한 연속 RGB | Keyframe별 Pointmap/Pose/correspondence | 유효 Keyframe 2개 이상, 같은 표면 재관측 및 좌표 정합 |
+| E2a Keyframe별 tagging | E1a RGB | Keyframe별 SAB3R score/tag/uncertainty | 전 Keyframe 공통 전처리 및 pixel mapping 확인 |
+| E3a temporal Region | E2a tag + E1a 대응 | persistent Region ID, association edge/history | 같은 표면 연결, 분리 표면 오병합 방지, ID 안정성 측정 |
+| E4a 오차 유도 국소 보정 | E3a Region + frozen pointmap | 선택 점만 보정, 후보 score/제외 사유 | 비대상 점 불변, 변위 제한, 실패율 기록 |
+| E5a 다중 시점 평가 | B0–B3 결과 + 평가 전용 GT | scene/Region metric | 공통 정렬, GT leakage 차단, scene 단위 집계 |
+| E6a 확장 보고 | E1a–E5a manifest | 보고서와 hash index | B2/B3·환경별 결과 및 실패 사례 포함 |
 
 실제 E0a 점검은 [E0a 사전 점검 결과](experiments/E0a_preflight/E0a-readiness-20261104-002.md)에 기록했습니다. 통과 판정은 사전 환경 확인이며 SLAM 추론 성공을 의미하지 않습니다.
 
@@ -83,6 +99,32 @@ runs/semantic_region_pointmap/<run-id>/
 실제 E4 plane refinement는 [E4 결과 보고서](experiments/E4_geometry_refinement/E4-replica-office0-pilot.md)에 기록했습니다. GT를 보정 입력에 쓰지 않았으며, 변경된 점 밖의 좌표는 수치적으로 불변이었습니다.
 
 실제 E5 geometry 평가는 [E5 결과 보고서](experiments/E5_gt_evaluation/E5-replica-office0-pilot.md)에 기록했습니다. 이 단일 frame 결과에서 계획서의 10% RMSE 개선 목표는 지지되지 않았습니다.
+
+## 다음 확장: 다중 Keyframe temporal Region 실험
+
+단일 Keyframe 파일럿에서는 SAB3R tag의 시간 안정성과 Region 병합을 검증하지 못했습니다. 다음 계획은 상세 계획서의 [E1a–E6a 확장 프로토콜](semantic_region_pointmap_experiment_plan.md)에 따라 연속 RGB 시퀀스를 다중 Keyframe pointmap으로 export하고, 각 Keyframe에 tag를 생성한 뒤 같은 물리 표면만 persistent Region ID로 연결하는 것입니다. 같은 semantic class라는 이유만으로는 병합하지 않습니다.
+
+확장 run은 기존 pilot 산출물을 덮어쓰지 않도록 별도 config와 run ID를 사용합니다.
+
+```bash
+python3 scripts/experiment.py init \\
+  --config configs/semantic_region_multikeyframe_extension.json \\
+  --run-id E1a-multikeyframe-20261104-001
+python3 scripts/experiment.py capture-env E1a-multikeyframe-20261104-001
+```
+
+| 코드 | 목적 | 구현 예정 실행기 |
+|---|---|---|
+| E1a | 같은 표면을 여러 시점에서 관측하는 연속 SLAM export | `run_e1a_multikeyframe_slam_export.sh` |
+| E2a | E1a의 모든 Keyframe에 동일 prompt/전처리로 SAB3R tag 부여 | `run_e2a_multikeyframe_semantics.sh` |
+| E3a | 대응점·공간 overlap·법선·평면 검사를 사용한 association/merge | `run_e3a_temporal_region_association.sh` |
+| E4a | validation에서 고정한 cross-view error score로 후보를 선별하고 Region 내부만 최적화 | `run_e4a_error_guided_refinement.sh` |
+| E5a | 동일 E1a 입력에 B0–B3를 비교하고 평가 전용 GT로 검증 | `run_e5a_multikeyframe_gt_evaluation.sh` |
+| E6a | stage manifest/hash와 장면별 결과를 모아 보고 | `run_e6a_extension_report.sh` |
+
+위 전용 실행기는 계획에 등록한 이름이며 **아직 구현·실행되지 않았습니다.** E1a 설정은 validation 장면에서 먼저 고정하고, 최소 2개 Keyframe과 반복 관측 표면을 게이트로 둡니다. 3개 독립 scene을 목표로 하며, 현실/야외 장면에 GT가 없으면 그 결과는 정성 추적 평가로 분리합니다. E4a는 test GT로 후보를 고르지 않고, confidence·대응 residual·cross-view 3D consistency·plane residual 등 validation에서 동결한 신호를 사용합니다. 비평면/혼합 Region은 큰 residual만으로 평탄화하지 않습니다.
+
+여기서 E6a는 확장 결과 보고 단계입니다. 상세 연구 계획의 선택적 E6 3DGS 실험과는 다른 코드이므로 혼동하지 않습니다.
 
 공통 runner는 그 단계의 `logs/command.log`에 로그를 남기고 상태를 기록하며, 해당 단계의 `artifacts/`만 출력 경로로 사용합니다. E1–E4 전용 runner가 각각 SLAM export, semantic score/mask, Region, bounded ray-depth plane refinement를 연결하고, E5 전용 runner는 고정 B0 기반의 단일 평가 Sim(3)와 Replica depth 비교를 수행합니다. E6 report runner는 입력 stage manifest와 artifact hash를 확인한 뒤 stage 내부 요약과 `docs/experiments/E6_report/` 보고서를 생성합니다.
 
