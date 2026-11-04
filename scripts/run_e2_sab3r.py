@@ -51,6 +51,7 @@ def main() -> None:
     parser.add_argument("--input-npz", type=Path, required=True)
     parser.add_argument("--input-image", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--stage-name", default="E2_sab3r_semantics")
     args = parser.parse_args()
 
     repo = args.repo.resolve()
@@ -162,7 +163,7 @@ def main() -> None:
     gpu_memory = torch.cuda.max_memory_allocated(device) / (1024**2)
     checkpoint_path = args.checkpoint.absolute()
     metadata = {
-        "stage": "E2_sab3r_semantics",
+        "stage": args.stage_name,
         "status": "completed",
         "execution_context": "host",
         "device": torch.cuda.get_device_name(device),

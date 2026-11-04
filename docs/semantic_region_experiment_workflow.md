@@ -122,7 +122,7 @@ python3 scripts/experiment.py capture-env E1a-multikeyframe-20261104-001
 | E5a | 동일 E1a 입력에 B0–B3를 비교하고 평가 전용 GT로 검증 | `run_e5a_multikeyframe_gt_evaluation.sh` |
 | E6a | stage manifest/hash와 장면별 결과를 모아 보고 | `run_e6a_extension_report.sh` |
 
-E1a 실행기 `run_e1a_multikeyframe_slam_export.sh`는 구현해 office0 120-frame 파일럿에서 실행했습니다. 결과는 [E1a 보고서](experiments/E1a_multikeyframe_export/E1a-replica-office0-120frame.md)에 있습니다. E2a–E6a 전용 실행기는 **아직 구현·실행되지 않았습니다.** E1a 설정은 validation 장면에서 먼저 고정하고, 최소 2개 Keyframe과 반복 관측 표면을 게이트로 둡니다. 3개 독립 scene을 목표로 하며, 현실/야외 장면에 GT가 없으면 그 결과는 정성 추적 평가로 분리합니다. E4a는 test GT로 후보를 고르지 않고, confidence·대응 residual·cross-view 3D consistency·plane residual 등 validation에서 동결한 신호를 사용합니다. 비평면/혼합 Region은 큰 residual만으로 평탄화하지 않습니다.
+E1a와 E2a 실행기는 구현해 office0 120-frame/two-Keyframe 파일럿에서 실행했습니다. 결과는 [E1a 보고서](experiments/E1a_multikeyframe_export/E1a-replica-office0-120frame.md)와 [E2a 보고서](experiments/E2a_multikeyframe_semantics/E2a-replica-office0-2keyframes.md)에 있습니다. E3a–E6a 전용 실행기는 **아직 구현·실행되지 않았습니다.** E1a 설정은 validation 장면에서 먼저 고정하고, 최소 2개 Keyframe과 반복 관측 표면을 게이트로 둡니다. 3개 독립 scene을 목표로 하며, 현실/야외 장면에 GT가 없으면 그 결과는 정성 추적 평가로 분리합니다. E4a는 test GT로 후보를 고르지 않고, confidence·대응 residual·cross-view 3D consistency·plane residual 등 validation에서 동결한 신호를 사용합니다. 비평면/혼합 Region은 큰 residual만으로 평탄화하지 않습니다.
 
 E1a 재현 명령은 MASt3R-SLAM이 실행되는 **호스트 터미널**에서 수행합니다.
 
@@ -134,6 +134,14 @@ bash scripts/run_e1a_multikeyframe_slam_export.sh \\
   /home/hlee221212/works/gradresearch_sab3r/third_party/MASt3R-SLAM/config/base.yaml \\
   32 \\
   /home/hlee221212/works/gradresearch_mast3r_slam/thirdparty/mast3r-env/bin/python3.11
+```
+
+E2a도 호스트 GPU에서 실행하며, E1a export와 SAB3R checkpoint를 입력으로 받아 모든 Keyframe 결과를 frame별 디렉터리에 보존합니다.
+
+```bash
+bash scripts/run_e2a_multikeyframe_semantics.sh \\
+  E1a-multikeyframe-20261104-002 \\
+  E1a-multikeyframe-20261104-002
 ```
 
 여기서 E6a는 확장 결과 보고 단계입니다. 상세 연구 계획의 선택적 E6 3DGS 실험과는 다른 코드이므로 혼동하지 않습니다.
