@@ -1,0 +1,28 @@
+{
+  "stage": "E5a_multikeyframe_gt_evaluation",
+  "scene_split": "validation",
+  "ground_truth_use": "evaluation only; no Replica depth, camera trajectory, or GT geometry is read by E1a-E4a selection/refinement",
+  "depth_resampling": "nearest neighbor to MASt3R-SLAM long-edge-512 resize and center crop",
+  "gt_world_transform": "per-frame Replica camera-to-world pose from traj.txt",
+  "sim3_alignment": "one scene-level Sim(3) fit from B0 across every Keyframe, then reused for B0-B3",
+  "sim3_fit_sampling": "deterministic even-row/even-column lattice",
+  "same_pixel_metrics": ["RMSE", "mean", "median", "P95", "outlier rate", "5cm same-pixel accuracy"],
+  "surface_metric": "scene-level nearest-neighbor precision/recall/F-score on deterministic 2x2 pixel lattice",
+  "normal_metric": "absolute-dot angular error between pointmap and GT-depth world normals",
+  "boundary_metric": "absolute change in adjacent 3D point spacing across fixed SAB3R semantic boundaries",
+  "outlier_threshold_m": 0.05,
+  "geometry_only_regions": {
+    "max_neighbor_distance_over_local_spacing": 1.5,
+    "max_seed_normal_angle_degrees": 30.0,
+    "max_seed_plane_offset_over_local_spacing": 2.0,
+    "region_note": "4-connected seed-anchored plane growing; semantics are not read; fixed from validation before any test run"
+  },
+  "methods": {
+    "B0": "original MASt3R-SLAM pointmap",
+    "B1": "geometry-only frame-local Regions with common frozen bounded plane optimizer",
+    "B2": "SAB3R semantic frame-local Regions, no temporal merge, same optimizer",
+    "B3": "SAB3R semantic persistent Regions with temporal merge, same optimizer",
+    "B4": "not run unless GT semantic/plane masks are present; Replica export contains paired depth and trajectory only"
+  },
+  "threshold_status": "error score/selection threshold frozen from two scene-level validation runs; no test GT or test scene used"
+}
