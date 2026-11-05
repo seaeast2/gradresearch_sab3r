@@ -1,0 +1,51 @@
+{
+  "experiment_name": "semantic_region_pointmap_e7_outdoor_transfer",
+  "run_root": "runs/semantic_region_pointmap",
+  "dataset_id": "uavscenes_amtown01_registered_mapping",
+  "scene_ids": ["UAVScenes/AMtown01"],
+  "random_seed": 0,
+  "models": {
+    "mast3r_slam_path_env": "MAST3R_SLAM_ROOT",
+    "sab3r_path_env": "SAB3R_ROOT",
+    "mast3r_slam_python_env": "MAST3R_SLAM_PYTHON",
+    "sab3r_python_env": "SAB3R_PYTHON",
+    "mast3r_slam_python": ".venvs/mast3r-slam/bin/python",
+    "sab3r_python": ".venvs/sab3r/bin/python",
+    "mast3r_slam_commit": "e6f4e3d474fad0e11f561482012be864ba8c3f17",
+    "sab3r_commit": "",
+    "checkpoint_id": ""
+  },
+  "source_runs": {
+    "e1a": "E7-uav-amtown01-test-20261105-006"
+  },
+  "stages": [
+    "E0_environment",
+    "E2a_multikeyframe_semantics",
+    "E3a_temporal_region_association",
+    "E4a_error_guided_local_refinement",
+    "E7_outdoor_transfer"
+  ],
+  "dataset": {
+    "source_rgb_dir": "/home/hlee221212/works/gradresearch_mast3r_slam/data/AMtown01/mapping",
+    "source_frame_table": "/home/hlee221212/works/gradresearch_mast3r_slam/data/AMtown01/mapping_frames.csv",
+    "semantic_inference_long_edge": 384,
+    "semantic_prompt_config": "/home/hlee221212/works/gradresearch_sab3r/configs/e7_amtown01_semantic_prompts.json",
+    "e4a_refinement_config": "/home/hlee221212/works/gradresearch_sab3r/configs/e4a_outdoor_error_guided_refinement.json",
+    "description": "Postprocess the frozen E1a export from the registered 240-frame AMtown01 mapping split. SAB3R inference is reduced to 384 long edge to fit the available 8 GiB GPU."
+  },
+  "upstream_source_snapshot": {
+    "mast3r_commit": "e6f4e3d474fad0e11f561482012be864ba8c3f17",
+    "mast3r_dirty_patch_sha256": "924028f79f3eac40509051c665b011317871c28efb95f530f4805d20870dc3d6"
+  },
+  "policy": {
+    "never_overwrite_run": true,
+    "separate_model_environments": true,
+    "ground_truth_for_evaluation_only": true,
+    "slam_pose_fixed_during_refinement": true,
+    "scene_level_split": true,
+    "temporal_merge_requires_geometry_or_correspondence": true,
+    "outdoor_transfer_report_is_qualitative": true,
+    "no_claim_of_accuracy_without_paired_lidar_evaluation": true,
+    "reuse_frozen_e1a_source_run": true
+  }
+}

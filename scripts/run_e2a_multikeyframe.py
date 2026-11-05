@@ -32,6 +32,7 @@ def main() -> int:
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--inference-size", type=int, default=512)
+    parser.add_argument("--prompts-config", type=Path)
     args = parser.parse_args()
 
     e1a = args.e1a_artifacts.resolve()
@@ -87,6 +88,8 @@ def main() -> int:
             "--stage-name", "E2a_multikeyframe_semantics",
             "--inference-size", str(args.inference_size),
         ]
+        if args.prompts_config:
+            command.extend(("--prompts-config", str(args.prompts_config.resolve())))
         subprocess.run(command, cwd=args.repo.resolve(), env=env, check=True)
         score_file = result_dir / "semantic_scores.npz"
         inference_file = result_dir / "inference.json"
@@ -113,8 +116,10 @@ def main() -> int:
         "source_e1a_export_manifest": str(export_path),
         "source_e1a_export_manifest_sha256": sha256(export_path),
         "keyframe_count": len(records),
-        "labels_and_prompts": "fixed by scripts/run_e2_sab3r.py and shared across every Keyframe",
+        "labels_and_prompts": "fixed by scripts/run_e2_sab3r.py or the registered prompts config and shared across every Keyframe",
         "inference_size_long_edge": args.inference_size,
+        "prompts_config": str(args.prompts_config.resolve()) if args.prompts_config else None,
+        "prompts_config_sha256": sha256(args.prompts_config.resolve()) if args.prompts_config else None,
         "elapsed_seconds": time.perf_counter() - started,
         "keyframes": records,
     }

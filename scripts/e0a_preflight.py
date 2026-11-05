@@ -43,6 +43,10 @@ def main() -> int:
     parser.add_argument("--mast3r-python", default=os.environ.get("MAST3R_SLAM_PYTHON"), required=False)
     parser.add_argument("--dataset", default=os.environ.get("E1_DATASET"), required=False)
     parser.add_argument("--config", default=os.environ.get("E1_CONFIG"), required=False)
+    parser.add_argument(
+        "--allow-dirty-patch-sha256",
+        help="allow a dirty tracked MASt3R-SLAM checkout only when its git diff HEAD hash matches",
+    )
     args = parser.parse_args()
     if os.environ.get("EXPERIMENT_EXECUTION_CONTEXT") != "host":
         parser.error("E0a must run outside the sandbox with EXPERIMENT_EXECUTION_CONTEXT=host")
@@ -70,6 +74,26 @@ def main() -> int:
     elif stage_manifest["status"] != "running":
         parser.error(f"E0a stage must be planned or running, got {stage_manifest['status']!r}")
     upstream_info = git_info(root)
+    dirty_patch_hash = None
+    dirty_patch_match = False
+    untracked_paths = []
+    if upstream_info.get("dirty"):
+        diff_result = subprocess.run(
+            ["git", "diff", "HEAD", "--binary"], cwd=root, check=False,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        status_result = command_result(["git", "status", "--porcelain", "--untracked-files=all"], cwd=root)
+        if diff_result.returncode == 0:
+            dirty_patch_hash = __import__("hashlib").sha256(
+                diff_result.stdout
+            ).hexdigest()
+        status_lines = status_result.get("stdout", "").splitlines()
+        untracked_paths = [line for line in status_lines if line.startswith("??")]
+        dirty_patch_match = bool(
+            args.allow_dirty_patch_sha256
+            and dirty_patch_hash == args.allow_dirty_patch_sha256
+            and not untracked_paths
+        )
     python_version = command_result([str(python_path), "--version"])
     nvidia = command_result([
         "nvidia-smi", "--query-gpu=name,memory.total,driver_version", "--format=csv,noheader"
@@ -135,6 +159,7 @@ def main() -> int:
         "host_execution_context": True,
         "mast3r_root_exists": (root / "main.py").is_file(),
         "mast3r_checkout_clean": upstream_info.get("dirty") is False,
+        "mast3r_source_snapshot_valid": upstream_info.get("dirty") is False or dirty_patch_match,
         "mast3r_python_available": python_version["available"],
         "python_imports_pinned_checkout": source_matches,
         "required_checkpoints_available": checkpoints_available,
@@ -153,7 +178,7 @@ def main() -> int:
             "sha256": hashlib.sha256(input_manifest.read_bytes()).hexdigest(),
             "content": json.loads(input_manifest.read_text(encoding="utf-8")),
         }
-    ready = all(checks.values())
+    ready = all(value for name, value in checks.items() if name != "mast3r_checkout_clean")
     report = {
         "run_id": args.run_id,
         "stage": "E0a_preflight",
@@ -163,6 +188,12 @@ def main() -> int:
         "checks": checks,
         "ready_for_E1": ready,
         "mast3r": upstream_info,
+        "mast3r_dirty_source": {
+            "diff_head_sha256": dirty_patch_hash,
+            "expected_sha256": args.allow_dirty_patch_sha256,
+            "hash_matches": dirty_patch_match,
+            "untracked_paths": untracked_paths,
+        },
         "python": {"path": str(python_path), "version": python_version, "torch_cuda": torch_probe,
                    "import_paths": import_paths, "import_probe": import_probe},
         "gpu": nvidia,

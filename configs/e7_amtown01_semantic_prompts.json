@@ -1,0 +1,32 @@
+{
+  "dataset": "UAVScenes/AMtown01",
+  "labels": [
+    "road",
+    "ground",
+    "building",
+    "roof",
+    "facade",
+    "vegetation",
+    "tree",
+    "sky",
+    "water",
+    "vehicle",
+    "person",
+    "other"
+  ],
+  "prompts": [
+    "an aerial drone photograph of a paved road",
+    "an aerial drone photograph of bare ground or soil",
+    "an aerial drone photograph of a building",
+    "an aerial drone photograph of a building roof",
+    "an aerial drone photograph of a building facade or wall",
+    "an aerial drone photograph of vegetation",
+    "an aerial drone photograph of a tree",
+    "an aerial drone photograph of the sky",
+    "an aerial drone photograph of water",
+    "an aerial drone photograph of a vehicle",
+    "an aerial drone photograph of a person",
+    "other outdoor scene content"
+  ],
+  "notes": "Fixed outdoor vocabulary for this pilot. CLIP argmax outputs are exploratory labels and are not calibrated semantic ground truth."
+}

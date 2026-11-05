@@ -36,6 +36,9 @@ def main() -> int:
     parser.add_argument("--keyframe-buffer", type=int, default=32)
     parser.add_argument("--stage-name", default="E1_slam_export", help="experiment stage name")
     parser.add_argument("--upstream-root", default=os.environ.get("MAST3R_SLAM_ROOT"))
+    parser.add_argument("--frame-time-csv", help="optional source timestamp table for periodic Keyframes")
+    parser.add_argument("--min-keyframe-seconds", type=float, default=0.0)
+    parser.add_argument("--force-periodic-keyframes", action="store_true")
     args = parser.parse_args()
 
     run_dir = Path(os.environ.get("EXPERIMENT_RUN_DIR", ""))
@@ -83,65 +86,72 @@ def main() -> int:
     parser_args_hook = '    parser.add_argument("--calib", default="")\n'
     if source_text.count(parser_args_hook) != 1:
         parser.error("upstream main.py has an unsupported argument section")
-    source_text = source_text.replace(
-        parser_args_hook,
-        parser_args_hook
-        + '    parser.add_argument("--keyframe-buffer", type=int, default=32)\n'
-        + '    parser.add_argument("--low-vram", action="store_true")\n',
-    )
+    if 'parser.add_argument("--keyframe-buffer"' not in source_text:
+        source_text = source_text.replace(
+            parser_args_hook,
+            parser_args_hook
+            + '    parser.add_argument("--keyframe-buffer", type=int, default=32)\n'
+            + '    parser.add_argument("--low-vram", action="store_true")\n',
+        )
     parse_args_hook = "    args = parser.parse_args()\n\n    load_config(args.config)\n"
-    if source_text.count(parse_args_hook) != 1:
+    if source_text.count(parse_args_hook) == 1:
+        source_text = source_text.replace(
+            parse_args_hook,
+            "    args = parser.parse_args()\n"
+            "    if args.keyframe_buffer < 1:\n"
+            "        parser.error(\"--keyframe-buffer must be positive\")\n\n"
+            "    load_config(args.config)\n",
+        )
+    elif source_text.count("    args = parser.parse_args()\n") != 1 or "args.keyframe_buffer < 1" not in source_text:
         parser.error("upstream main.py has an unsupported argument parsing section")
-    source_text = source_text.replace(
-        parse_args_hook,
-        "    args = parser.parse_args()\n"
-        "    if args.keyframe_buffer < 1:\n"
-        "        parser.error(\"--keyframe-buffer must be positive\")\n\n"
-        "    load_config(args.config)\n",
-    )
     if source_text.count('        raise RuntimeError("final pointmap export requires single_thread: true")\n') != 1:
         parser.error("single-thread guard insertion failed")
-    source_text = source_text.replace(
-        '        raise RuntimeError("final pointmap export requires single_thread: true")\n',
-        '        raise RuntimeError("final pointmap export requires single_thread: true")\n'
-        '    if args.low_vram and not config["single_thread"]:\n'
-        '        parser.error("--low-vram requires single_thread: true")\n'
-        '    if args.low_vram:\n'
-        '        config["release_backend_cuda_cache"] = True\n',
-    )
+    if 'if args.low_vram and not config["single_thread"]:' not in source_text:
+        source_text = source_text.replace(
+            '        raise RuntimeError("final pointmap export requires single_thread: true")\n',
+            '        raise RuntimeError("final pointmap export requires single_thread: true")\n'
+            '    if args.low_vram and not config["single_thread"]:\n'
+            '        parser.error("--low-vram requires single_thread: true")\n'
+            '    if args.low_vram:\n'
+            '        config["release_backend_cuda_cache"] = True\n',
+        )
     keyframe_ctor = "    keyframes = SharedKeyframes(manager, h, w)\n"
-    if source_text.count(keyframe_ctor) != 1:
+    if source_text.count(keyframe_ctor) == 1:
+        source_text = source_text.replace(
+            keyframe_ctor,
+            "    keyframes = SharedKeyframes(manager, h, w, buffer=args.keyframe_buffer)\n",
+        )
+    elif "SharedKeyframes(manager, h, w, buffer=args.keyframe_buffer)" not in source_text:
         parser.error("upstream keyframe constructor changed; review the buffer adaptation")
-    source_text = source_text.replace(
-        keyframe_ctor,
-        "    keyframes = SharedKeyframes(manager, h, w, buffer=args.keyframe_buffer)\n",
-    )
     init_state_hook = "            states.set_frame(frame)\n            i += 1\n            continue\n"
-    if source_text.count(init_state_hook) != 1:
+    if source_text.count(init_state_hook) == 1:
+        source_text = source_text.replace(
+            init_state_hook,
+            "            states.set_frame(frame)\n"
+            "            if args.low_vram:\n"
+            "                torch.cuda.empty_cache()\n"
+            "                while True:\n"
+            '                    if not backend.is_alive():\n'
+            '                        raise RuntimeError("backend process died during initialization")\n'
+            "                    with states.lock:\n"
+            "                        if len(states.global_optimizer_tasks) == 0:\n"
+            "                            break\n"
+            "                    time.sleep(0.01)\n"
+            "            i += 1\n            continue\n",
+        )
+    elif "backend process died during initialization" not in source_text:
         parser.error("upstream initialization section changed; review the low-VRAM synchronization")
-    source_text = source_text.replace(
-        init_state_hook,
-        "            states.set_frame(frame)\n"
-        "            if args.low_vram:\n"
-        "                torch.cuda.empty_cache()\n"
-        "                while True:\n"
-        '                    if not backend.is_alive():\n'
-        '                        raise RuntimeError("backend process died during initialization")\n'
-        "                    with states.lock:\n"
-        "                        if len(states.global_optimizer_tasks) == 0:\n"
-        "                            break\n"
-        "                    time.sleep(0.01)\n"
-        "            i += 1\n            continue\n",
-    )
-    if source_text.count("        if add_new_kf:\n            keyframes.append(frame)\n") != 1:
+    add_kf_hook = "        if add_new_kf:\n            keyframes.append(frame)\n"
+    if source_text.count(add_kf_hook) == 1:
+        source_text = source_text.replace(
+            add_kf_hook,
+            "        if add_new_kf:\n"
+            "            if args.low_vram:\n"
+            "                torch.cuda.empty_cache()\n"
+            "            keyframes.append(frame)\n",
+        )
+    elif "if args.low_vram:\n                torch.cuda.empty_cache()\n            keyframes.append(frame)" not in source_text:
         parser.error("upstream new-keyframe section changed; review the low-VRAM cache guard")
-    source_text = source_text.replace(
-        "        if add_new_kf:\n            keyframes.append(frame)\n",
-        "        if add_new_kf:\n"
-        "            if args.low_vram:\n"
-        "                torch.cuda.empty_cache()\n"
-        "            keyframes.append(frame)\n",
-    )
     backend_solve_hook = (
         '        if config["use_calib"]:\n'
         "            factor_graph.solve_GN_calib()\n"
@@ -149,19 +159,18 @@ def main() -> int:
         "            factor_graph.solve_GN_rays()\n\n"
         "        with states.lock:\n"
     )
-    if source_text.count(backend_solve_hook) != 1:
+    if source_text.count(backend_solve_hook) == 1:
+        source_text = source_text.replace(
+            backend_solve_hook,
+            backend_solve_hook.replace(
+                "\n\n        with states.lock:",
+                '\n        if cfg.get("release_backend_cuda_cache", False):\n'
+                "            torch.cuda.empty_cache()\n\n        with states.lock:",
+            ),
+        )
+    elif 'cfg.get("release_backend_cuda_cache", False)' not in source_text:
         parser.error("upstream backend optimization section changed; review the cache release hook")
-    source_text = source_text.replace(
-        backend_solve_hook,
-        backend_solve_hook.replace(
-            "\n\n        with states.lock:",
-            '\n        if cfg.get("release_backend_cuda_cache", False):\n'
-            "            torch.cuda.empty_cache()\n\n        with states.lock:",
-        ),
-    )
     drain_hook = "        if i == len(dataset):\n            states.set_mode(Mode.TERMINATED)\n"
-    if source_text.count(drain_hook) != 1:
-        parser.error("upstream main.py has an unsupported end-of-sequence section")
     drain = (
         "        if i == len(dataset):\n"
         "            if config.get(\"single_thread\", False):\n"
@@ -175,7 +184,10 @@ def main() -> int:
         "                    time.sleep(0.01)\n"
         "            states.set_mode(Mode.TERMINATED)\n"
     )
-    source_text = source_text.replace(drain_hook, drain)
+    if source_text.count(drain_hook) == 1:
+        source_text = source_text.replace(drain_hook, drain)
+    elif "pending = len(states.global_optimizer_tasks)" not in source_text:
+        parser.error("upstream main.py has an unsupported end-of-sequence section")
     hook = "    if dataset.save_results:\n        save_dir, seq_name = eval.prepare_savedir(args, dataset)\n        eval.save_traj("
     if source_text.count(hook) != 1:
         parser.error("upstream main.py does not match the supported final-save hook; pin/review its source first")
@@ -217,6 +229,14 @@ def main() -> int:
         "--keyframe-buffer", str(args.keyframe_buffer),
         "--low-vram",
     ]
+    if args.frame_time_csv:
+        time_csv = Path(args.frame_time_csv).expanduser().resolve()
+        if not time_csv.is_file():
+            parser.error(f"frame time CSV not found: {time_csv}")
+        command.extend(("--frame-time-csv", str(time_csv)))
+        command.extend(("--min-keyframe-seconds", str(args.min_keyframe_seconds)))
+        if args.force_periodic_keyframes:
+            command.append("--force-periodic-keyframes")
     if calib is not None:
         command.extend(("--calib", str(calib)))
     env = os.environ.copy()
@@ -247,6 +267,10 @@ def main() -> int:
         "python": str(python_path),
         "keyframe_buffer": args.keyframe_buffer,
         "low_vram": True,
+        "frame_time_csv": str(Path(args.frame_time_csv).resolve()) if args.frame_time_csv else None,
+        "frame_time_csv_sha256": sha256(Path(args.frame_time_csv).resolve()) if args.frame_time_csv else None,
+        "min_keyframe_seconds": args.min_keyframe_seconds,
+        "force_periodic_keyframes": args.force_periodic_keyframes,
         "torch_force_no_weights_only_load": env["TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"],
         "gpu_memory_monitor": "nvidia-smi sampled at 200ms; host-wide memory.used",
         "export_hook": "after final frame loop, before stock save_reconstruction; requires single_thread",

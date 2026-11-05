@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import colorsys
 import hashlib
 import json
 import os
@@ -52,9 +53,26 @@ def main() -> None:
     parser.add_argument("--input-image", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--stage-name", default="E2_sab3r_semantics")
+    parser.add_argument("--prompts-config", type=Path,
+                        help="JSON object with fixed labels and prompts for this domain")
     parser.add_argument("--inference-size", type=int, default=512,
                         help="DUSt3R long-edge inference size; scores are mapped back to the E1 pixel grid")
     args = parser.parse_args()
+
+    global PROMPTS, LABELS, PALETTE
+    prompt_config_sha256 = None
+    if args.prompts_config:
+        prompt_path = args.prompts_config.resolve()
+        prompt_config = json.loads(prompt_path.read_text(encoding="utf-8"))
+        PROMPTS = prompt_config["prompts"]
+        LABELS = prompt_config["labels"]
+        if len(PROMPTS) != len(LABELS) or not PROMPTS or len(set(LABELS)) != len(LABELS):
+            parser.error("prompt config must define one unique label per nonempty prompt")
+        PALETTE = np.asarray([
+            [round(c * 255) for c in colorsys.hsv_to_rgb(i / len(LABELS), 0.66, 0.92)]
+            for i in range(len(LABELS))
+        ], dtype=np.uint8)
+        prompt_config_sha256 = sha256_file(prompt_path)
 
     repo = args.repo.resolve()
     featup = args.featup.resolve()
@@ -229,6 +247,8 @@ def main() -> None:
         ),
         "labels": LABELS,
         "text_prompts": PROMPTS,
+        "prompt_config": str(args.prompts_config.resolve()) if args.prompts_config else None,
+        "prompt_config_sha256": prompt_config_sha256,
         "scoring": "cosine similarity between normalized SAB3R per-pixel CLIP features and normalized CLIP text embeddings",
         "mask_policy": "argmax over fixed candidate prompts; raw scores and top1-top2 margin saved; no confidence calibration or threshold claimed",
         "elapsed_seconds": elapsed,

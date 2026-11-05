@@ -126,6 +126,14 @@ E1a와 E2a 실행기는 office0 120-frame/two-Keyframe 파일럿 및 room0 1,000
 
 H4 ablation은 동일 E1a–E3a 산출물과 validation-frozen Region selection/plane gates를 사용하고 E4a 최적화 설정의 한 요소만 바꾼 독립 run으로 수행합니다. 기준 Huber+confidence+2×spacing 조건에 대해 `e4a_ablation_squared_loss.json`(Huber reweighting 제거), `e4a_ablation_uniform_confidence.json`(신뢰도 가중치 제거), `e4a_ablation_half_displacement.json`(최대 변위 2×에서 1× spacing으로 감소)을 비교합니다. 각 variant는 동일 E5a 공통 Sim(3) 평가기로 평가하며, test GT를 선택·보정 입력에 사용하지 않습니다. 이 설정은 ablation 실행 전에 고정하고, 설정 변경은 새 run ID로 남깁니다. E6a 종합 결과는 [Markdown 보고서](experiments/E6a_extension_report/E6a-replica-multikeyframe-synthesis-20261104-004.md)와 [검증된 provenance/hash index](experiments/E6a_extension_report/E6a-replica-multikeyframe-synthesis-20261104-004-provenance.json)에 기록했습니다.
 
+### E7 — 야외 도메인 전이 파일럿
+
+E7은 Replica 실내 test와 분리한 UAVScenes 야외 전이 실험입니다. 이번 run은 외부 연구 저장소에서 이미 등록·추출된 `AMtown01` mapping split의 JPEG 240장을 사용합니다(5 Hz, 등록된 60–120초 구간, held-out RGB 제외). source timestamp를 staging manifest에 연결하고 1초 간격 forced Keyframe 규칙으로 E1a를 실행한 뒤 E2a–E4a를 수행합니다. SAB3R prompt는 드론 항공 영상용 road/ground/building/roof/facade/vegetation/sky 등의 고정 후보를 사용하며, E4a는 road/ground/roof/facade만 평면 후보로 받습니다. indoor에서 동결된 2.04× spacing 오차 문턱은 바꾸지 않고 야외 미검증 transfer로 표시합니다. 마지막 `E7_outdoor_transfer` 단계가 입력·산출물 hash를 검증해 Keyframe, 의미 태그, persistent Region, 보정·rollback 규모를 보고합니다. upstream MASt3R-SLAM은 외부 baseline에 쓰인 tracked 변경을 포함하므로, E7 config의 exact `git diff HEAD` SHA-256과 일치할 때만 E0a source snapshot gate를 통과시킵니다. 설정은 [E7 config](../configs/semantic_region_e7_outdoor_transfer.json), [야외 prompt](../configs/e7_amtown01_semantic_prompts.json), [야외 refinement 설정](../configs/e4a_outdoor_error_guided_refinement.json), 보고 실행기는 `scripts/run_e7_outdoor_transfer.sh`입니다.
+
+첫 E7 결과는 [AMtown01 보고서](experiments/E7_outdoor_transfer/E7-UAVScenes-AMtown01-20261105.md)에 기록했습니다. E1a에서 51 Keyframe, E3a에서 213 Region/48 accepted links가 나왔지만 E2a의 51개 전부가 `other`로 분류되어 E4a 후보는 0개 적용됐습니다. E7 stage는 끝났으나 야외 의미 전이는 **inconclusive**이며 LiDAR 정확도 지표는 미측정입니다.
+
+이 E7 파일럿은 야외에서 semantic Region 파이프라인이 끝까지 동작하는지 확인하는 정성 전이 검사입니다. Replica E5a 지표를 야외에 그대로 적용하지 않으며, UAV LiDAR와 timestamp·카메라 보정·포즈를 연결하는 별도 evaluator가 없으므로 E7 보고서에서 metric accuracy를 주장하지 않습니다. LiDAR는 추론 입력에 넣지 않습니다. 이전 `/home/hlee221212/works/gradresearch` E4e HKairport01 실행은 pose 누락 gate를 넘지 못해 주 평가가 미실행이었습니다. `/home/hlee221212/works/gradresearch_mast3r_slam`의 E7은 별도 SLAM 연구 코드이므로 이 저장소의 `E7_outdoor_transfer`와 산출물·가설을 혼합하지 않습니다.
+
 E1a 재현 명령은 MASt3R-SLAM이 실행되는 **호스트 터미널**에서 수행합니다.
 
 ```bash
